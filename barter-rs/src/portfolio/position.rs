@@ -154,6 +154,7 @@ impl PositionUpdater for Position {
             DataKind::OrderBookL1(book_l1) => book_l1.volume_weighed_mid_price(),
             DataKind::OrderBook(book) => book.volume_weighed_mid_price()?,
             DataKind::Liquidation(_) => return None,
+            DataKind::Erc20Transfer(_) => return None,
         };
 
         self.meta.update_time = market.exchange_time;

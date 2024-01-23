@@ -14,8 +14,9 @@ use barter::{
         trading::{Config as StatisticConfig, TradingSummary},
         Initialiser,
     },
-    strategy::mm::{Config as StrategyConfig, GLFTStrategy},
+    strategy::glft_mm::mm::{Config as StrategyConfig, GLFTStrategy},
 };
+
 use barter_data::{
     event::{DataKind, MarketEvent, MarketIter},
     exchange::{

@@ -125,6 +125,8 @@ pub mod subscriber;
 /// Barter output type the exchange will be transformed into.
 pub mod subscription;
 
+/// on-chain streams
+pub mod dex;
 /// Generic [`ExchangeTransformer`] implementations used by [`MarketStream`]s to translate exchange
 /// specific types to normalised Barter types.
 ///

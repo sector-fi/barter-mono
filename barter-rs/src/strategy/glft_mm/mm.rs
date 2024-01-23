@@ -1,5 +1,5 @@
-use super::glft::*;
-use super::{Signal, SignalGenerator};
+use crate::strategy::{Signal, SignalGenerator};
+
 use barter_data::{
     event::{DataKind, MarketEvent},
     subscription::trade::PublicTrade,
@@ -9,6 +9,11 @@ use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use tracing::{error, warn};
+
+use super::glft::{
+    compute_coeff, get_params, measure_trading_intensity_and_volatility, reset_array,
+    MeasurementParams,
+};
 
 const INTERVAL: i64 = 100; // ms interval for measurments
 const GAMMA: f64 = 0.05;
