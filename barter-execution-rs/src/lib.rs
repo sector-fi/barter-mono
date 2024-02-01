@@ -176,6 +176,7 @@ pub fn filter_responses<T>(responses: Vec<Result<T, ExecutionError>>) -> Vec<T> 
 pub enum ExecutionId {
     Simulated,
     Binance,
+    Uniswapx,
 }
 
 impl From<ExecutionId> for Exchange {
@@ -195,6 +196,7 @@ impl ExecutionId {
         match self {
             ExecutionId::Simulated => "simulated",
             ExecutionId::Binance => "binance",
+            ExecutionId::Uniswapx => "uniswapx",
         }
     }
 }
