@@ -32,11 +32,11 @@ pub mod requests;
 // Simulated [`ExecutionClient`] implementation that integrates with the Barter
 /// [`SimulatedExchange`](super::exchange::SimulatedExchange).
 #[derive(Debug)]
-pub struct UniswapxExecution {
+pub struct UniswapxExecution<Event> {
     client: UniswapxClient,
     instruments_map: HashMap<UniswapxPair, Instrument>,
     // client_type: BinanceApi,
-    pub event_tx: mpsc::UnboundedSender<AccountEvent>,
+    pub event_tx: mpsc::UnboundedSender<Event>,
     pub order_tx: mpsc::UnboundedSender<ExchangeRequest>,
 }
 
@@ -44,33 +44,36 @@ pub struct UniswapxExecution {
 #[derive(Debug)]
 pub struct UniswapxConfig {
     client: UniswapxClient,
-    client_type: UniswapxApi,
     instruments: Vec<Instrument>,
+    order_tx: mpsc::UnboundedSender<ExchangeRequest>,
 }
 
 #[async_trait]
-impl ExecutionClient for UniswapxExecution {
+impl<Event> ExecutionClient for UniswapxExecution<Event> 
+where
+    Event: Send + From<AccountEvent>,
+{
     const CLIENT: ExecutionId = ExecutionId::Simulated;
     type Config = UniswapxConfig;
+    type Event = Event;
 
-    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self {
-        let (order_tx, order_rx) = mpsc::unbounded_channel();
+    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<Event>) -> Self {
+        let client = UniswapxClient::new();
         Self {
-            client: config.client,
+            client,
             instruments_map: Self::instruments_map(config.instruments),
             event_tx,
-            order_tx, //: config.order_tx,
+            order_tx: config.order_tx,
         }
     }
 
-    fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest> {
-        // self.order_tx.clone()
-        todo!()
-    }
+    // fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest> {
+    //     // self.order_tx.clone()
+    //     todo!()
+    // }
 
-    fn event_tx(&self) -> mpsc::UnboundedSender<AccountEvent> {
-        // self.event_tx.clone()
-        todo!()
+    fn event_tx(&self) -> &mpsc::UnboundedSender<Event> {
+        &self.event_tx
     }
 
     fn exchange(&self) -> Exchange {
@@ -113,7 +116,7 @@ impl UniswapxPair {
     }
 }
 
-impl UniswapxExecution {
+impl<Event> UniswapxExecution<Event> {
     fn instruments_map(instruments: Vec<Instrument>) -> HashMap<UniswapxPair, Instrument> {
         instruments
             .into_iter()

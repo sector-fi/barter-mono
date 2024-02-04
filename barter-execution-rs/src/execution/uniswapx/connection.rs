@@ -46,7 +46,7 @@ pub struct UniswapxClient {
 }
 
 impl UniswapxClient {
-    pub fn new(api_type: UniswapxApi) -> UniswapxClient {
+    pub fn new() -> UniswapxClient {
         UniswapxClient {}
     }
 
