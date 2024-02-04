@@ -1,12 +1,22 @@
 use barter::cerebrum::{
     account::{Account, Accounts, Position},
-    event::{Balance, Command, Event, EventFeed},
-    exchange::ExecutionRequest,
+    event::{Command, Event, EventFeed},
+    exchange::{ClientId, ExchangePortal},
     strategy,
     strategy::IndicatorUpdater,
     Engine,
 };
-use barter_execution::model::order::{Order, RequestCancel, RequestOpen};
+use barter_execution::{
+    fill::Fees,
+    model::{
+        balance::Balance,
+        execution_event::ExecutionRequest,
+        order::{Order, OrderKind, RequestCancel, RequestOpen},
+        ClientOrderId,
+    },
+    simulated::{execution::SimulationConfig, util::run_default_exchange, SimulatedEvent},
+    ExecutionId,
+};
 use dotenv::dotenv;
 
 use barter_data::{
@@ -23,13 +33,14 @@ use barter_data::{
 };
 use barter_integration::model::{
     instrument::{kind::InstrumentKind, Instrument},
-    Exchange,
+    Exchange, Side,
 };
 use std::ops::Add;
 use std::{collections::HashMap, time::Duration};
 use tokio::sync::mpsc;
 
 struct StrategyExample {
+    counter: usize,
     // rsi: ta::indicators::RelativeStrengthIndex,
 }
 
@@ -44,17 +55,52 @@ impl IndicatorUpdater for StrategyExample {
 }
 
 impl strategy::OrderGenerator for StrategyExample {
-    fn generate_cancels(&self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
+    fn generate_cancels(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
         None
     }
 
-    fn generate_orders(&self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
-        None
+    fn generate_orders(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
+        if self.counter > 10 {
+            return None;
+        }
+        let order = order_request_limit(
+            Instrument::new("btc", "usdt", InstrumentKind::Perpetual),
+            ClientOrderId(uuid::Uuid::new_v4()),
+            Side::Buy,
+            10000.0,
+            0.001,
+        );
+        self.counter += 1;
+        Some(vec![(Exchange::from(ExecutionId::Simulated), vec![order])])
+    }
+}
+
+// Utility for creating an Open Order request
+fn order_request_limit<I>(
+    instrument: I,
+    cid: ClientOrderId,
+    side: Side,
+    price: f64,
+    quantity: f64,
+) -> Order<RequestOpen>
+where
+    I: Into<Instrument>,
+{
+    Order {
+        exchange: Exchange::from(ExecutionId::Simulated),
+        instrument: instrument.into(),
+        cid,
+        side,
+        state: RequestOpen {
+            kind: OrderKind::Limit,
+            price,
+            quantity,
+        },
     }
 }
 
 // Notes:
-// - Hard-coded to use one Exchange, Ftx
+// - Hard-coded to use one Exchange, Binance
 #[tokio::main]
 async fn main() {
     dotenv().ok();
@@ -78,8 +124,14 @@ async fn main() {
     // EventFeed Component: MarketFeed:
     let subscriptions = init_market_feed(event_tx.clone()).await;
 
+    let (event_simulated_tx, event_simulated_rx) = mpsc::unbounded_channel();
+    let (execution_tx, _execution_rx) = mpsc::unbounded_channel();
+
+    // Build SimulatedExchange & run on it's own Tokio task
+    tokio::spawn(run_default_exchange(execution_tx, event_simulated_rx));
+
     // EventFeed Component: AccountFeed:
-    init_account_feed(event_tx.clone(), exchange_rx);
+    init_account_feed(event_tx.clone(), exchange_rx, event_simulated_tx).await;
 
     // EventFeed Component: CommandFeed
     init_command_feed(event_tx, terminate);
@@ -91,6 +143,7 @@ async fn main() {
 
     // StrategyExample
     let strategy = StrategyExample {
+        counter: 0,
         // rsi: ta::indicators::RelativeStrengthIndex::new(14).unwrap(),
     };
 
@@ -105,11 +158,11 @@ async fn main() {
         .expect("failed to build Engine");
 
     // Run Engine
-    // std::thread::spawn(move || engine.run());
+    std::thread::spawn(move || engine.run());
 
-    tokio::task::spawn(async move { engine.run() })
-        .await
-        .unwrap();
+    // tokio::spawn(async move { engine.run().await })
+    //     .await
+    //     .unwrap();
 
     tokio::time::sleep(terminate.add(Duration::from_secs(1))).await
 }
@@ -160,7 +213,6 @@ where
     });
 
     // is separate thread necessary here?
-
     // std::thread::spawn(move || loop {
     //     match market_rx.try_recv() {
     //         Ok(trade) => event_tx
@@ -183,30 +235,32 @@ where
 
 // Todo:
 //  - Will change when we setup the ExchangeClients properly, likely needs Vec<Instrument>
-fn init_account_feed(
-    _event_tx: mpsc::UnboundedSender<Event>,
-    mut exchange_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
+async fn init_account_feed(
+    event_tx: mpsc::UnboundedSender<Event>,
+    exchange_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
+    event_simulated_tx: mpsc::UnboundedSender<SimulatedEvent>,
 ) {
-    tokio::task::spawn(async move {
-        while let Some(request) = exchange_rx.recv().await {
-            match request {
-                ExecutionRequest::FetchOrdersOpen(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::FetchBalances(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::OpenOrders(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::CancelOrders(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::CancelOrdersAll(_) => {
-                    // Todo:
-                }
-            }
-        }
+    let mut exchanges = HashMap::new();
+    let sim_config = SimulationConfig {
+        simulated_fees_pct: Fees {
+            exchange: 0.1,
+            slippage: 0.05,
+            network: 0.0,
+        },
+        request_tx: event_simulated_tx,
+    };
+    exchanges.insert(ExecutionId::Simulated, ClientId::Simulated(sim_config));
+    let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
+        .await
+        .expect("failed to init ExchangePortal");
+
+    // tokio::spawn(async move {
+    //     ex_portal.run().await;
+    // });
+
+    // alternately we can spawn sync thread
+    std::thread::spawn(move || {
+        ex_portal.run();
     });
 }
 
@@ -224,13 +278,18 @@ fn init_accounts<Ex, Kind>(
 where
     Exchange: Eq + std::hash::Hash,
 {
-    let instruments = subscriptions
+    let instruments: Vec<Instrument> = subscriptions
         .into_iter()
         .map(|subscription| subscription.instrument)
         .collect();
 
     let mut accounts = HashMap::new();
-    accounts.insert(exchange, init_account(instruments));
+    accounts.insert(exchange, init_account(instruments.clone()));
+    // we need to init instruments for simulated exchange
+    accounts.insert(
+        Exchange::from(ExecutionId::Simulated),
+        init_account(instruments),
+    );
     Accounts(accounts)
 }
 

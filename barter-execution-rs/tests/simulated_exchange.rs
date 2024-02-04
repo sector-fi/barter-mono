@@ -1,26 +1,26 @@
-// use crate::util::{
-//     fees_50_percent, initial_balances, latency_50ms, open_order, order_cancel_request,
-//     order_cancelled, order_request_limit, run_default_exchange,
-// };
-// use barter_data::subscription::trade::PublicTrade;
-// use barter_execution::{
-//     error::ExecutionError,
-//     fill::Fees,
-//     model::{
-//         balance::{Balance, SymbolBalance},
-//         order::OrderId,
-//         trade::{SymbolFees, Trade, TradeId},
-//         AccountEvent, AccountEventKind, ClientOrderId,
-//     },
-//     simulated::{execution::SimulatedExecution, SimulatedEvent},
-//     ExecutionClient,
-// };
-// use barter_integration::model::{
-//     instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},
-//     Side,
-// };
-// use tokio::sync::mpsc;
-// use uuid::Uuid;
+use crate::util::{open_order, order_cancel_request, order_cancelled, order_request_limit};
+use barter_data::subscription::trade::PublicTrade;
+use barter_execution::simulated::util::{
+    fees_50_percent, initial_balances, latency_50ms, run_default_exchange,
+};
+use barter_execution::{
+    error::ExecutionError,
+    fill::Fees,
+    model::{
+        balance::{Balance, SymbolBalance},
+        order::OrderId,
+        trade::{SymbolFees, Trade, TradeId},
+        AccountEvent, AccountEventKind, ClientOrderId,
+    },
+    simulated::{execution::SimulatedExecution, SimulatedEvent},
+    ExecutionClient,
+};
+use barter_integration::model::{
+    instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},
+    Side,
+};
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
 // mod util;
 
@@ -56,11 +56,12 @@
 //     // Build SimulatedExchange & run on it's own Tokio task
 //     tokio::spawn(run_default_exchange(event_account_tx, event_simulated_rx));
 
-//     // Initialise SimulatedExecution execution to interact with the exchange via the simulated channel
-//     let client = SimulatedExecution {
-//         fees_pct,
-//         request_tx: event_simulated_tx.clone(),
-//     };
+    // Initialise SimulatedExecution execution to interact with the exchange via the simulated channel
+    let client = SimulatedExecution {
+        fees_pct,
+        request_tx: event_simulated_tx.clone(),
+        event_tx: mpsc::unbounded_channel().0,
+    };
 
 //     // 1. Fetch initial OpenOrders when we have no open Orders
 //     test_1_fetch_initial_orders_and_check_empty(&client).await;
@@ -144,16 +145,18 @@
 //     test_14_fail_to_cancel_limit_with_order_not_found(&client).await;
 // }
 
-// // 1. Fetch initial OpenOrders when we have no open Orders.
-// async fn test_1_fetch_initial_orders_and_check_empty(client: &SimulatedExecution) {
-//     let initial_orders = client.fetch_orders_open().await.unwrap();
-//     assert!(initial_orders.is_empty());
-// }
+// 1. Fetch initial OpenOrders when we have no open Orders.
+async fn test_1_fetch_initial_orders_and_check_empty(client: &SimulatedExecution<AccountEvent>) {
+    let initial_orders = client.fetch_orders_open().await.unwrap();
+    assert!(initial_orders.is_empty());
+}
 
-// // 2. Fetch initial Balances when there have been no balance changing events.
-// async fn test_2_fetch_balances_and_check_same_as_initial(client: &SimulatedExecution) {
-//     let actual_balances = client.fetch_balances().await.unwrap();
-//     let initial_balances = initial_balances();
+// 2. Fetch initial Balances when there have been no balance changing events.
+async fn test_2_fetch_balances_and_check_same_as_initial(
+    client: &SimulatedExecution<AccountEvent>,
+) {
+    let actual_balances = client.fetch_balances().await.unwrap();
+    let initial_balances = initial_balances();
 
 //     assert_eq!(actual_balances.len(), initial_balances.len());
 
@@ -163,21 +166,21 @@
 //     }
 // }
 
-// // 3. Open LIMIT Buy Order and check AccountEvent Balance is sent for the quote currency (usdt).
-// async fn test_3_open_limit_buy_order(
-//     client: &SimulatedExecution,
-//     test_3_ids: Ids,
-//     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
-// ) {
-//     let new_orders = client
-//         .open_orders(vec![order_request_limit(
-//             Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//             test_3_ids.cid,
-//             Side::Buy,
-//             100.0,
-//             1.0,
-//         )])
-//         .await;
+// 3. Open LIMIT Buy Order and check AccountEvent Balance is sent for the quote currency (usdt).
+async fn test_3_open_limit_buy_order(
+    client: &SimulatedExecution<AccountEvent>,
+    test_3_ids: Ids,
+    event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
+) {
+    let new_orders = client
+        .open_orders(vec![order_request_limit(
+            Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+            test_3_ids.cid,
+            Side::Buy,
+            100.0,
+            1.0,
+        )])
+        .await;
 
 //     let expected_new_order = open_order(
 //         Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
@@ -256,20 +259,20 @@
 //     }
 // }
 
-// // 5. Cancel the open buy order and check AccountEvents for cancelled order and balance are sent.
-// async fn test_5_cancel_buy_order(
-//     client: &SimulatedExecution,
-//     test_3_ids: Ids,
-//     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
-// ) {
-//     let cancelled = client
-//         .cancel_orders(vec![order_cancel_request(
-//             Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//             test_3_ids.cid,
-//             Side::Buy,
-//             test_3_ids.id.clone(),
-//         )])
-//         .await;
+// 5. Cancel the open buy order and check AccountEvents for cancelled order and balance are sent.
+async fn test_5_cancel_buy_order(
+    client: &SimulatedExecution<AccountEvent>,
+    test_3_ids: Ids,
+    event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
+) {
+    let cancelled = client
+        .cancel_orders(vec![order_cancel_request(
+            Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+            test_3_ids.cid,
+            Side::Buy,
+            test_3_ids.id.clone(),
+        )])
+        .await;
 
 //     let expected_cancelled = order_cancelled(
 //         Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
@@ -319,31 +322,31 @@
 //     }
 // }
 
-// // 6. Open 2x limit buy orders and check AccountEvents for balance & order new are sent
-// async fn test_6_open_2x_limit_buy_orders(
-//     client: &SimulatedExecution,
-//     test_6_ids_1: Ids,
-//     test_6_ids_2: Ids,
-//     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
-// ) {
-//     let opened_orders = client
-//         .open_orders(vec![
-//             order_request_limit(
-//                 Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//                 test_6_ids_1.cid,
-//                 Side::Buy,
-//                 100.0,
-//                 1.0,
-//             ),
-//             order_request_limit(
-//                 Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//                 test_6_ids_2.cid,
-//                 Side::Buy,
-//                 200.0,
-//                 1.0,
-//             ),
-//         ])
-//         .await;
+// 6. Open 2x limit buy orders and check AccountEvents for balance & order new are sent
+async fn test_6_open_2x_limit_buy_orders(
+    client: &SimulatedExecution<AccountEvent>,
+    test_6_ids_1: Ids,
+    test_6_ids_2: Ids,
+    event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
+) {
+    let opened_orders = client
+        .open_orders(vec![
+            order_request_limit(
+                Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+                test_6_ids_1.cid,
+                Side::Buy,
+                100.0,
+                1.0,
+            ),
+            order_request_limit(
+                Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+                test_6_ids_2.cid,
+                Side::Buy,
+                200.0,
+                1.0,
+            ),
+        ])
+        .await;
 
 //     let expected_order_new_1 = open_order(
 //         Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
@@ -520,52 +523,52 @@
 //     }
 // }
 
-// // 8. Fetch open orders & check there is only one limit buy order remaining from test_6_order_cid_1.
-// async fn test_8_fetch_open_orders_and_check_test_6_order_cid_1_only(
-//     client: &SimulatedExecution,
-//     test_6_ids_1: Ids,
-// ) {
-//     let open_orders = client.fetch_orders_open().await.unwrap();
-//     assert_eq!(open_orders.len(), 1);
-//     assert_eq!(
-//         open_orders[0].clone(),
-//         open_order(
-//             Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//             test_6_ids_1.cid,
-//             test_6_ids_1.id,
-//             Side::Buy,
-//             100.0,
-//             1.0,
-//             0.0
-//         )
-//     );
-// }
+// 8. Fetch open orders & check there is only one limit buy order remaining from test_6_order_cid_1.
+async fn test_8_fetch_open_orders_and_check_test_6_order_cid_1_only(
+    client: &SimulatedExecution<AccountEvent>,
+    test_6_ids_1: Ids,
+) {
+    let open_orders = client.fetch_orders_open().await.unwrap();
+    assert_eq!(open_orders.len(), 1);
+    assert_eq!(
+        open_orders[0].clone(),
+        open_order(
+            Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+            test_6_ids_1.cid,
+            test_6_ids_1.id,
+            Side::Buy,
+            100.0,
+            1.0,
+            0.0
+        )
+    );
+}
 
-// // 9. Open 2x LIMIT Sell Order & check AccountEvents for balances and order news are sent.
-// async fn test_9_open_2x_limit_sell_orders(
-//     client: &SimulatedExecution,
-//     test_9_ids_1: Ids,
-//     test_9_ids_2: Ids,
-//     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
-// ) {
-//     let opened_orders = client
-//         .open_orders(vec![
-//             order_request_limit(
-//                 Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//                 test_9_ids_1.cid,
-//                 Side::Sell,
-//                 500.0,
-//                 1.0,
-//             ),
-//             order_request_limit(
-//                 Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//                 test_9_ids_2.cid,
-//                 Side::Sell,
-//                 1000.0,
-//                 1.0,
-//             ),
-//         ])
-//         .await;
+// 9. Open 2x LIMIT Sell Order & check AccountEvents for balances and order news are sent.
+async fn test_9_open_2x_limit_sell_orders(
+    client: &SimulatedExecution<AccountEvent>,
+    test_9_ids_1: Ids,
+    test_9_ids_2: Ids,
+    event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
+) {
+    let opened_orders = client
+        .open_orders(vec![
+            order_request_limit(
+                Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+                test_9_ids_1.cid,
+                Side::Sell,
+                500.0,
+                1.0,
+            ),
+            order_request_limit(
+                Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+                test_9_ids_2.cid,
+                Side::Sell,
+                1000.0,
+                1.0,
+            ),
+        ])
+        .await;
 
 //     let expected_order_new_1 = open_order(
 //         Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
@@ -822,15 +825,15 @@
 //     }
 // }
 
-// // 11. Cancel all open orders. Includes a partially filled sell order, and non-filled buy order.
-// //     Check AccountEvents for orders cancelled and balances are sent.
-// async fn test_11_cancel_all_orders(
-//     client: &SimulatedExecution,
-//     test_6_ids_1: Ids,
-//     test_9_ids_2: Ids,
-//     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
-// ) {
-//     let cancelled = client.cancel_orders_all().await.unwrap();
+// 11. Cancel all open orders. Includes a partially filled sell order, and non-filled buy order.
+//     Check AccountEvents for orders cancelled and balances are sent.
+async fn test_11_cancel_all_orders(
+    client: &SimulatedExecution<AccountEvent>,
+    test_6_ids_1: Ids,
+    test_9_ids_2: Ids,
+    event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
+) {
+    let cancelled = client.cancel_orders_all().await.unwrap();
 
 //     let expected_cancelled = vec![
 //         order_cancelled(
@@ -913,37 +916,37 @@
 //     }
 // }
 
-// // 12. Fetch open orders (now that we've called cancel_all) and check it is empty
-// async fn test_12_fetch_open_orders_and_check_empty(client: &SimulatedExecution) {
-//     let open_orders = client.fetch_orders_open().await.unwrap();
-//     assert!(open_orders.is_empty());
-// }
+// 12. Fetch open orders (now that we've called cancel_all) and check it is empty
+async fn test_12_fetch_open_orders_and_check_empty(client: &SimulatedExecution<AccountEvent>) {
+    let open_orders = client.fetch_orders_open().await.unwrap();
+    assert!(open_orders.is_empty());
+}
 
-// // 13. Fail to open limit buy order with insufficient funds
-// async fn test_13_fail_to_open_one_of_two_limits_with_insufficient_funds(
-//     client: &SimulatedExecution,
-//     test_13_ids_1: Ids,
-//     test_13_ids_2: Ids,
-//     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
-// ) {
-//     let opened_orders = client
-//         .open_orders(vec![
-//             order_request_limit(
-//                 Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//                 test_13_ids_1.cid,
-//                 Side::Buy,
-//                 1_000_000_000.0,
-//                 1.0,
-//             ),
-//             order_request_limit(
-//                 Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//                 test_13_ids_2.cid,
-//                 Side::Sell,
-//                 1000.0,
-//                 1.0,
-//             ),
-//         ])
-//         .await;
+// 13. Fail to open limit buy order with insufficient funds
+async fn test_13_fail_to_open_one_of_two_limits_with_insufficient_funds(
+    client: &SimulatedExecution<AccountEvent>,
+    test_13_ids_1: Ids,
+    test_13_ids_2: Ids,
+    event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
+) {
+    let opened_orders = client
+        .open_orders(vec![
+            order_request_limit(
+                Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+                test_13_ids_1.cid,
+                Side::Buy,
+                1_000_000_000.0,
+                1.0,
+            ),
+            order_request_limit(
+                Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+                test_13_ids_2.cid,
+                Side::Sell,
+                1000.0,
+                1.0,
+            ),
+        ])
+        .await;
 
 //     let expected_order_new_1 = ExecutionError::InsufficientBalance(Symbol::from("usdt"));
 //     let expected_order_new_2 = open_order(
@@ -1015,17 +1018,19 @@
 //     }
 // }
 
-// // 14. Fail to cancel limit order with OrderNotFound using incorrect OrderId
-// async fn test_14_fail_to_cancel_limit_with_order_not_found(client: &SimulatedExecution) {
-//     let cid = ClientOrderId(Uuid::new_v4());
-//     let cancelled = client
-//         .cancel_orders(vec![order_cancel_request(
-//             Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
-//             cid,
-//             Side::Buy,
-//             OrderId::from("order will not be found"),
-//         )])
-//         .await;
+// 14. Fail to cancel limit order with OrderNotFound using incorrect OrderId
+async fn test_14_fail_to_cancel_limit_with_order_not_found(
+    client: &SimulatedExecution<AccountEvent>,
+) {
+    let cid = ClientOrderId(Uuid::new_v4());
+    let cancelled = client
+        .cancel_orders(vec![order_cancel_request(
+            Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
+            cid,
+            Side::Buy,
+            OrderId::from("order will not be found"),
+        )])
+        .await;
 
 //     let expected = ExecutionError::OrderNotFound(cid);
 

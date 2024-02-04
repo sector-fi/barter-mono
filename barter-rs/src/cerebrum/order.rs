@@ -1,4 +1,6 @@
-use super::{consume::Consumer, exchange::ExecutionRequest, Cerebrum, Engine};
+use barter_execution::model::execution_event::ExecutionRequest;
+
+use super::{consume::Consumer, Cerebrum, Engine};
 
 /// OrderGenerator can transition to:
 ///  a) Consumer
@@ -17,7 +19,7 @@ impl<Strategy> Cerebrum<OrderGenerator<Algorithmic>, Strategy>
 where
     Strategy: super::strategy::OrderGenerator,
 {
-    pub fn generate_order_requests(self) -> Engine<Strategy> {
+    pub fn generate_order_requests(mut self) -> Engine<Strategy> {
         // Send CancelOrders Command to ExchangeClient
         if let Some(cancel_requests) = self.strategy.generate_cancels() {
             self.request_tx
