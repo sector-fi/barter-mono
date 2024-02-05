@@ -29,6 +29,9 @@ pub mod trade;
 /// intent_order  [`SubKind`] and the associated Barter output data model.
 pub mod intent_order;
 
+/// account_update  [`SubKind`] and the associated Barter output data model.
+pub mod account_update;
+
 /// Defines the type of a [`Subscription`], and the output [`Self::Event`] that it yields.
 pub trait SubKind
 where

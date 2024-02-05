@@ -14,6 +14,9 @@ pub mod l2;
 /// Liquidation types.
 pub mod liquidation;
 
+/// Account types.
+pub mod account;
+
 /// [`BinanceFuturesUsd`] WebSocket server base url.
 ///
 /// See docs: <https://binance-docs.github.io/apidocs/futures/en/#websocket-market-streams>

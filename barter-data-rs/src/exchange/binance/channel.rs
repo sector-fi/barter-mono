@@ -46,6 +46,8 @@ impl BinanceChannel {
     ///
     /// See docs: <https://binance-docs.github.io/apidocs/futures/en/#liquidation-order-streams>
     pub const LIQUIDATIONS: Self = Self("@forceOrder");
+
+    pub const ACCOUNT_UPDATE: Self = Self("@account");
 }
 
 impl<Server> Identifier<BinanceChannel> for Subscription<Binance<Server>, PublicTrades> {
