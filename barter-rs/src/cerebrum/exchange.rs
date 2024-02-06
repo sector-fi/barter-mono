@@ -171,7 +171,7 @@ impl ExchangePortal {
         self.clients
             .get(exchange)
             .cloned()
-            .expect("cannot retrieve ExchangeClient for unexpected Exchange")
+            .expect(&format!("cannot retrieve ExchangeClient for {}", exchange))
     }
 }
 

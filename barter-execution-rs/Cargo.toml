@@ -19,12 +19,16 @@ barter-data = { version = "0.7.0", path = "../barter-data-rs" }
 
 # Logging
 tracing = "0.1.36"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
+
+# Networking
+url = "2.3.1"
 
 # Async
 tokio = { version = "1.17.0", features = ["sync", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.9", features = ["sync"] }
 tokio-tungstenite = { version = "0.18.0", features = [
-  "rustls-tls-webpki-roots",
+    "rustls-tls-webpki-roots",
 ] }
 futures = "0.3.21"
 async-trait = "0.1.57"
