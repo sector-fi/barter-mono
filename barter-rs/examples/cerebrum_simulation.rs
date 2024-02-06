@@ -70,8 +70,7 @@ impl strategy::OrderGenerator for StrategyExample {
         &mut self,
         accounts: &Accounts,
     ) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
-        return None;
-        if self.counter > 10 {
+        if self.counter > 1 {
             return None;
         }
         let sim_acc = accounts.get(&Exchange::from(ExecutionId::Simulated));

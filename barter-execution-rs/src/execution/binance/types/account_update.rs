@@ -138,6 +138,7 @@ pub struct BinanceBalanceUpdate {
 
 /// [`BinanceFuturesUsd`](super::BinanceFuturesUsd) BinancePositionUpdate.
 /// ### Raw Payload Examples
+/// ```json
 ///           {
 ///             "s":"BTCUSDT",            // Symbol
 ///             "pa":"0",                 // Position Amount
@@ -148,7 +149,7 @@ pub struct BinanceBalanceUpdate {
 ///             "mt":"isolated",          // Margin Type
 ///             "iw":"0.00000000",        // Isolated Wallet (if isolated position)
 ///             "ps":"BOTH"               // Position Side
-///           }，
+///           }
 /// ```
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]

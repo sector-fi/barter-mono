@@ -1,7 +1,99 @@
+use crate::model::{
+    order::OrderId,
+    trade::{SymbolFees, Trade, TradeId},
+    AccountEventKind,
+};
+
 use super::BinanceFuturesEventType;
-use barter_integration::model::{instrument::symbol::Symbol, PerpSide, Side};
+use barter_integration::model::{
+    instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},
+    PerpSide, Side,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+/// enums for the order status
+/// Order Type
+/// MARKET
+/// LIMIT
+/// STOP
+/// TAKE_PROFIT
+/// LIQUIDATION
+///
+/// Execution Type
+/// NEW
+/// CANCELED
+/// CALCULATED - Liquidation Execution
+/// EXPIRED
+/// TRADE
+/// AMENDMENT - Order Modified
+///
+/// Order Status
+/// NEW
+/// PARTIALLY_FILLED
+/// FILLED
+/// CANCELED
+/// EXPIRED
+/// EXPIRED_IN_MATCH
+///
+/// Time in force
+/// GTC
+/// IOC
+/// FOK
+/// GTX
+///
+/// Working Type
+/// MARK_PRICE
+/// CONTRACT_PRICE
+
+//// Order status
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum BinanceFutOrderStatus {
+    #[serde(rename = "NEW")]
+    New,
+    #[serde(rename = "PARTIALLY_FILLED")]
+    PartiallyFilled,
+    #[serde(rename = "FILLED")]
+    Filled,
+    #[serde(rename = "CANCELED")]
+    Canceled,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+    #[serde(rename = "EXPIRED_IN_MATCH")]
+    ExpiredInMatch,
+}
+
+/// Execution type
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum BinFutExecutionType {
+    #[serde(rename = "NEW")]
+    New,
+    #[serde(rename = "CANCELED")]
+    Canceled,
+    #[serde(rename = "CALCULATED")]
+    Calculated,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+    #[serde(rename = "TRADE")]
+    Trade,
+    #[serde(rename = "AMENDMENT")]
+    Amendment,
+}
+
+/// Order type
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum BinFutOrderType {
+    #[serde(rename = "MARKET")]
+    Market,
+    #[serde(rename = "LIMIT")]
+    Limit,
+    #[serde(rename = "STOP")]
+    Stop,
+    #[serde(rename = "TAKE_PROFIT")]
+    TakeProfit,
+    #[serde(rename = "LIQUIDATION")]
+    Liquidation,
+}
 
 //// [`BinanceFuturesUsd`](super::BinanceFuturesUsd) AccountUpdate messages.
 ///
@@ -92,7 +184,7 @@ pub struct BinanceFutOrder {
     pub side: Side,
     /// Order type.
     #[serde(rename = "o")]
-    pub order_type: String,
+    pub order_type: BinFutOrderType,
     /// Time in force.
     #[serde(rename = "f")]
     pub time_in_force: String,
@@ -110,10 +202,10 @@ pub struct BinanceFutOrder {
     pub stop_price: f64,
     /// Execution type.
     #[serde(rename = "x")]
-    pub execution_type: String,
+    pub execution_type: BinFutExecutionType,
     /// Order status.
     #[serde(rename = "X")]
-    pub order_status: String,
+    pub order_status: BinanceFutOrderStatus,
     /// Order id.
     #[serde(rename = "i")]
     pub order_id: u64,
@@ -128,7 +220,7 @@ pub struct BinanceFutOrder {
     pub last_filled_price: f64,
     /// Commission asset.
     #[serde(default, rename = "N")]
-    pub commission_asset: Option<String>,
+    pub commission_asset: Option<Symbol>,
     /// Commission.
     #[serde(
         default,
@@ -187,4 +279,95 @@ pub struct BinanceFutOrder {
     pub tif_gtd_order_auto_cancel_time: i64,
     #[serde(rename = "ps")]
     pub position_side: PerpSide,
+}
+
+impl From<BinanceFutOrderUpdate> for AccountEventKind {
+    fn from(update: BinanceFutOrderUpdate) -> Self {
+        AccountEventKind::Trade({
+            let order = update.order;
+            Trade {
+                id: TradeId(order.trade_id.to_string()),
+                order_id: OrderId(order.order_id.to_string()),
+                instrument: Instrument {
+                    base: order.symbol.clone(),
+                    quote: order.symbol,
+                    kind: InstrumentKind::Perpetual,
+                },
+                side: order.side,
+                price: order.last_filled_price,
+                quantity: order.order_last_filled_quantity,
+                fees: SymbolFees {
+                    symbol: order.commission_asset.unwrap_or_default(),
+                    fees: order.commission.unwrap_or_default(),
+                },
+            }
+        })
+    }
+}
+
+// Test order update
+#[cfg(test)]
+mod test {
+    use super::*;
+    use barter_integration::model::instrument::symbol::Symbol;
+    use chrono::Utc;
+
+    #[test]
+    fn test_order_update() {
+        let order_update = BinanceFutOrderUpdate {
+            event_type: BinanceFuturesEventType::OrderTradeUpdate,
+            event_time: Utc::now(),
+            transaction_time: Utc::now(),
+            order: BinanceFutOrder {
+                symbol: Symbol::new("BTCUSDT"),
+                client_order_id: "TEST".to_string(),
+                side: Side::Buy,
+                order_type: BinFutOrderType::Limit,
+                time_in_force: "GTC".to_string(),
+                original_quantity: 0.001,
+                original_price: 0.0,
+                average_price: 0.0,
+                stop_price: 7103.04,
+                execution_type: BinFutExecutionType::New,
+                order_status: BinanceFutOrderStatus::New,
+                order_id: 8886774,
+                order_last_filled_quantity: 0.0,
+                order_filled_accumulated_quantity: 0.0,
+                last_filled_price: 0.0,
+                commission_asset: Some(Symbol::new("USDT")),
+                commission: Some(0.0),
+                order_trade_time: Utc::now(),
+                trade_id: 0,
+                bids_notional: 0.0,
+                ask_notional: 9.91,
+                is_maker_side: false,
+                is_reduce_only: false,
+                is_close_all: None,
+                activation_price: None,
+                callback_rate: None,
+                is_price_protection: None,
+                realized_profit: None,
+                stp_mode: "EXPIRE_TAKER".to_string(),
+                price_match_mode: "OPPONENT".to_string(),
+                tif_gtd_order_auto_cancel_time: 0,
+                position_side: PerpSide::Long,
+            },
+        };
+
+        let account_event: AccountEventKind = order_update.into();
+        match account_event {
+            AccountEventKind::Trade(trade) => {
+                assert_eq!(trade.id.0, "0");
+                assert_eq!(trade.order_id.0, "8886774");
+                assert_eq!(trade.instrument.base, "BTCUSDT".into());
+                assert_eq!(trade.instrument.quote, "BTCUSDT".into());
+                assert_eq!(trade.side, Side::Buy);
+                assert_eq!(trade.price, 0.0);
+                assert_eq!(trade.quantity, 0.0);
+                assert_eq!(trade.fees.symbol, "USDT".into());
+                assert_eq!(trade.fees.fees, 0.0);
+            }
+            _ => panic!("unexpected account event"),
+        }
+    }
 }

@@ -1,4 +1,7 @@
-use crate::{execution::binance::types::BinanceFuturesEventType, model::AccountEventKind};
+use crate::{
+    execution::binance::types::{order_update::BinanceFutOrderStatus, BinanceFuturesEventType},
+    model::AccountEventKind,
+};
 
 use super::types::{
     account_update::BinanceAccountUpdate, order_update::BinanceFutOrderUpdate,
@@ -75,12 +78,15 @@ fn process_message(msg: Message) -> Vec<AccountEventKind> {
                 }
                 BinanceFuturesEventType::OrderTradeUpdate => {
                     match serde_json::from_str::<BinanceFutOrderUpdate>(&text) {
-                        Ok(_order_trade_update) => {
-                            info!(
-                                "Received order trade update from Binance",
-                                // order_trade_update
-                            );
-                        }
+                        Ok(trade_update) => match trade_update.order.order_status {
+                            BinanceFutOrderStatus::Filled => {
+                                events.push(trade_update.into());
+                            }
+                            BinanceFutOrderStatus::PartiallyFilled => {
+                                events.push(trade_update.into());
+                            }
+                            _ => {}
+                        },
                         Err(e) => {
                             error!("Failed to parse order trade update: {}", e);
                         }
