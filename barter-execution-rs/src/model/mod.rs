@@ -13,6 +13,7 @@ pub mod balance;
 pub mod execution_event;
 pub mod order;
 pub mod order_event;
+pub mod position;
 pub mod trade;
 
 /// Normalised Barter [`AccountEvent`] containing metadata about the included
