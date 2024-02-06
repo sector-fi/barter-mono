@@ -192,6 +192,31 @@ impl Display for Side {
     }
 }
 
+/// [`PerpSide`] of a perpetual contract - Long or Short.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize, Serialize)]
+pub enum PerpSide {
+    #[serde(alias = "long", alias = "LONG", alias = "l")]
+    Long,
+    #[serde(alias = "short", alias = "SHORT", alias = "s")]
+    Short,
+    #[serde(alias = "both", alias = "BOTH", alias = "b")]
+    Both,
+}
+
+impl Display for PerpSide {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                PerpSide::Long => "long",
+                PerpSide::Short => "short",
+                PerpSide::Both => "both",
+            }
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

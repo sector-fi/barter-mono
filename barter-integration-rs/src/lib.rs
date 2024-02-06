@@ -179,3 +179,16 @@ where
         }
     }
 }
+
+/// Initialise a `Subscriber` for `Tracing` Json logs and install it as the global default.
+pub fn init_logging() {
+    tracing_subscriber::fmt()
+        // Filter messages based on the `RUST_LOG` environment variable
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        // Disable colours on release builds
+        .with_ansi(cfg!(debug_assertions))
+        // Enable Json formatting
+        .json()
+        // Install this Tracing subscriber as global default
+        .init()
+}

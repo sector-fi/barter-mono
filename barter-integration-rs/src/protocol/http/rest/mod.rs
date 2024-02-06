@@ -122,3 +122,16 @@ impl QueryParams {
         self.0.push((key.to_owned(), value.to_string()));
     }
 }
+
+impl Display for QueryParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut query = String::new();
+        for (i, (key, value)) in self.0.iter().enumerate() {
+            query.push_str(&format!("{}:{}", key, value));
+            if i < self.0.len() - 1 {
+                query.push(',');
+            }
+        }
+        write!(f, "{}", query)
+    }
+}
