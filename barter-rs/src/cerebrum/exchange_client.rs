@@ -5,16 +5,18 @@ use barter_execution::{
     model::{
         balance::SymbolBalance,
         order::{Cancelled, Open, Order, RequestCancel, RequestOpen},
+        AccountEventKind,
     },
     simulated::execution::{SimulatedExecution, SimulationConfig},
     ExecutionClient,
 };
 use barter_integration::model::Exchange;
+use futures::stream::BoxStream;
 
 // Todo:
 //   - Better name for this? This is the equivilant to ExchangeId...
 //    '--> renamed to ClientId for now to avoid confusion in development
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ClientId {
     Simulated(SimulationConfig),
     Binance(BinanceConfig),
@@ -47,6 +49,13 @@ impl ExecutionClient for ExchangeClient {
                 let client = BinanceExecution::init(config).await;
                 ExchangeClient::Binance(client)
             }
+        }
+    }
+
+    async fn init_stream(&self) -> Option<BoxStream<'static, AccountEventKind>> {
+        match self {
+            ExchangeClient::Simulated(client) => client.init_stream().await,
+            ExchangeClient::Binance(client) => client.init_stream().await,
         }
     }
 

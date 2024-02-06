@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use serde_json::Value;
 
 /// Determine the `DateTime<Utc>` from the provided `Duration` since the epoch.
@@ -23,6 +24,22 @@ where
         }
         Value::String(string) => string.parse::<T>().map_err(serde::de::Error::custom),
         _ => Err(serde::de::Error::custom("Expected a string or a number")),
+    }
+}
+
+/// Custom deserializer that tries to parse a string as f64.
+/// Returns None if the input is null or cannot be parsed.
+pub fn de_option_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let opt_str: Option<&str> = Option::deserialize(deserializer)?;
+    match opt_str {
+        Some(text) => match text.parse::<f64>() {
+            Ok(num) => Ok(Some(num)),
+            Err(_) => Err(serde::de::Error::custom("Failed to parse string as f64")),
+        },
+        None => Ok(None),
     }
 }
 

@@ -1,23 +1,21 @@
-use super::super::BinanceChannel;
-use crate::{
-    event::{MarketEvent, MarketIter},
-    exchange::ExchangeId,
-    subscription::account_update::{AccountUpdate, BalanceUpdate, PositionUpdate},
-    Identifier,
-};
+use super::BinanceFuturesEventType;
 use barter_integration::model::{
     instrument::{symbol::Symbol, Instrument},
-    Exchange, PerpSide, SubscriptionId,
+    PerpSide, SubscriptionId,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+use crate::model::{
+    balance::{Balance, SymbolBalance},
+    AccountEventKind, Position,
+};
 
 /// [`BinanceFuturesUsd`](super::BinanceFuturesUsd) AccountUpdate messages.
 ///
 /// ### Raw Payload Examples
 /// See docs: <https://binance-docs.github.io/apidocs/futures/en/#event-balance-and-position-update>
 /// ```json
-//// ```
 /// {
 ///     "e": "ACCOUNT_UPDATE",                // Event Type
 ///     "E": 1564745798939,                   // Event Time
@@ -76,10 +74,12 @@ use serde::{Deserialize, Serialize};
 ///         ]
 ///       }
 ///   }
+/// ```
+
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub struct BinanceAccountUpdate {
     #[serde(alias = "e")]
-    pub event_type: String,
+    pub event_type: BinanceFuturesEventType,
     #[serde(
         alias = "E",
         deserialize_with = "barter_integration::de::de_u64_epoch_ms_as_datetime_utc"
@@ -173,72 +173,82 @@ pub struct BinancePositionUpdate {
     pub position_side: PerpSide,
 }
 
-impl Identifier<Option<SubscriptionId>> for BinanceAccountUpdate {
-    fn id(&self) -> Option<SubscriptionId> {
-        Some(SubscriptionId::from(BinanceChannel::ACCOUNT_UPDATE.0))
-    }
-}
-
-impl From<BinanceBalanceUpdate> for BalanceUpdate {
+impl From<BinanceBalanceUpdate> for SymbolBalance {
     fn from(balance_update: BinanceBalanceUpdate) -> Self {
         Self {
-            asset: balance_update.asset,
-            wallet_balance: balance_update.wallet_balance,
-            cross_wallet_balance: balance_update.cross_wallet_balance,
-            balance_change: balance_update.balance_change,
+            symbol: balance_update.asset,
+            balance: Balance {
+                // TODO not totally clear if these are total or available
+                total: balance_update.wallet_balance + balance_update.cross_wallet_balance,
+                available: balance_update.wallet_balance + balance_update.cross_wallet_balance,
+            },
         }
     }
 }
 
-impl From<BinancePositionUpdate> for PositionUpdate {
+impl From<BinancePositionUpdate> for Position {
     fn from(position_update: BinancePositionUpdate) -> Self {
         Self {
-            symbol: position_update.symbol,
-            position_amount: position_update.position_amount,
-            position_side: position_update.position_side,
-            unrealized_pnl: position_update.unrealized_pnl,
-            entry_price: position_update.entry_price,
-            breakeven_price: position_update.breakeven_price,
+            // symbol: position_update.symbol,
+            // position_amount: position_update.position_amount,
+            // position_side: position_update.position_side,
+            // unrealized_pnl: position_update.unrealized_pnl,
+            // entry_price: position_update.entry_price,
+            // breakeven_price: position_update.breakeven_price,
         }
     }
 }
 
-impl From<(ExchangeId, Instrument, BinanceAccountUpdate)> for MarketIter<AccountUpdate> {
-    fn from(
-        (exchange_id, instrument, account_update): (ExchangeId, Instrument, BinanceAccountUpdate),
-    ) -> Self {
-        Self(vec![Ok(MarketEvent {
-            exchange_time: account_update.event_time,
-            received_time: Utc::now(),
-            exchange: Exchange::from(exchange_id),
-            instrument,
-            kind: AccountUpdate {
-                time: account_update.event_time,
-                balance_updates: account_update
+impl From<BinanceAccountUpdate> for (AccountEventKind, AccountEventKind) {
+    fn from(update: BinanceAccountUpdate) -> Self {
+        (
+            AccountEventKind::Balances(
+                update
                     .update_data
                     .balance_updates
                     .into_iter()
-                    .map(BalanceUpdate::from)
+                    .map(SymbolBalance::from)
                     .collect(),
-                position_updates: account_update
+            ),
+            AccountEventKind::Positions(
+                update
                     .update_data
                     .position_updates
                     .into_iter()
-                    .map(PositionUpdate::from)
+                    .map(Position::from)
                     .collect(),
-            },
-        })])
+            ),
+        )
     }
 }
 
-/// Deserialize a [`BinanceAccountUpdate`] "s"  as the associated [`SubscriptionId`].
-pub fn de_liquidation_subscription_id<'de, D>(deserializer: D) -> Result<SubscriptionId, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    Deserialize::deserialize(deserializer)
-        .map(|_market: String| SubscriptionId::from(BinanceChannel::ACCOUNT_UPDATE.0))
-}
+// impl From<(ExchangeId, Instrument, BinanceAccountUpdate)> for MarketIter<AccountUpdate> {
+//     fn from(
+//         (exchange_id, instrument, account_update): (ExchangeId, Instrument, BinanceAccountUpdate),
+//     ) -> Self {
+//         Self(vec![Ok(MarketEvent {
+//             exchange_time: account_update.event_time,
+//             received_time: Utc::now(),
+//             exchange: Exchange::from(exchange_id),
+//             instrument,
+//             kind: AccountUpdate {
+//                 time: account_update.event_time,
+//                 balance_updates: account_update
+//                     .update_data
+//                     .balance_updates
+//                     .into_iter()
+//                     .map(BalanceUpdate::from)
+//                     .collect(),
+//                 position_updates: account_update
+//                     .update_data
+//                     .position_updates
+//                     .into_iter()
+//                     .map(PositionUpdate::from)
+//                     .collect(),
+//             },
+//         })])
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -310,7 +320,7 @@ mod tests {
             }"#;
 
             let expected = BinanceAccountUpdate {
-                event_type: "ACCOUNT_UPDATE".to_string(),
+                event_type: BinanceFuturesEventType::AccountUpdate,
                 event_time: datetime_utc_from_epoch_duration(Duration::from_millis(1564745798939)),
                 transaction_time: datetime_utc_from_epoch_duration(Duration::from_millis(
                     1564745798938,

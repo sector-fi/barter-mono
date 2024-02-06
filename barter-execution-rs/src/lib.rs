@@ -31,6 +31,8 @@ use crate::{
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
 use execution::binance::{BinanceConfig, BinanceExecution};
+use futures::stream::BoxStream;
+use model::AccountEventKind;
 use serde::{Deserialize, Serialize};
 use simulated::execution::{SimulatedExecution, SimulationConfig};
 use std::fmt::{Display, Formatter};
@@ -69,6 +71,10 @@ pub trait ExecutionClient {
     /// Usually entails spawning an asynchronous WebSocket event loop to consume [`AccountEvent`]s
     /// from the exchange, as well as returning the HTTP client `Self`.
     async fn init(config: Self::Config) -> Self;
+
+    async fn init_stream(&self) -> Option<BoxStream<'static, AccountEventKind>> {
+        None
+    }
 
     /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
     // fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;

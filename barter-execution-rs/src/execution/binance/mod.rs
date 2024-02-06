@@ -1,15 +1,17 @@
 use async_trait::async_trait;
+use barter_data::exchange::ExchangeId;
 use barter_integration::model::{instrument::symbol::Symbol, Exchange};
-use futures::future::join_all;
-use tracing::{error, info};
+use futures::{future::join_all, stream::BoxStream};
+use tracing::error;
 
 use crate::{
     error::ExecutionError,
     model::{
         balance::SymbolBalance,
-        order::{self, Cancelled, Open, Order, OrderId, RequestCancel, RequestOpen},
+        order::{Cancelled, Open, Order, OrderId, RequestCancel, RequestOpen},
+        AccountEventKind,
     },
-    ExecutionClient, ExecutionId,
+    ExecutionClient,
 };
 
 use self::{
@@ -20,13 +22,14 @@ use self::{
 
 pub mod connection;
 pub mod requests;
+pub mod types;
 pub mod websocket;
 
 /// Binance [`ExecutionClient`] implementation that integrates with the Barter
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinanceExecution {
-    client: BinanceClient,
-    // client_type: BinanceApi,
+    pub client: BinanceClient,
+    client_type: BinanceApi,
 }
 
 /// Config for initializing a [`BinanceExecution`] instance.
@@ -35,23 +38,29 @@ pub struct BinanceConfig {
     pub client_type: BinanceApi,
 }
 
+/// Binance Execution Client
+impl BinanceExecution {}
+
 #[async_trait]
 impl ExecutionClient for BinanceExecution {
     type Config = BinanceConfig;
 
     fn exchange(&self) -> Exchange {
-        Exchange::from(ExecutionId::Simulated)
+        Exchange::from(ExchangeId::BinanceFuturesUsd)
     }
 
     async fn init(config: Self::Config) -> Self {
         let client = BinanceClient::new(config.client_type);
-        let url = BinanceClient::get_url(config.client_type);
-        let (api_key, _) = BinanceClient::get_key_secret(config.client_type);
-        init_listener(&api_key, url).await;
         Self {
             client,
-            // client_type: config.client_type,
+            client_type: config.client_type,
         }
+    }
+
+    async fn init_stream(&self) -> Option<BoxStream<'static, AccountEventKind>> {
+        let url = BinanceClient::get_url(self.client_type);
+        let (api_key, _) = BinanceClient::get_key_secret(self.client_type);
+        Some(init_listener(&api_key, url).await)
     }
 
     async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError> {

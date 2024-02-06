@@ -11,7 +11,6 @@ use barter_integration::{
     },
 };
 use chrono::Utc;
-use dotenv::dotenv;
 use hmac::Hmac;
 use reqwest::{RequestBuilder, StatusCode};
 use serde::Deserialize;
@@ -19,7 +18,6 @@ use tokio::sync::mpsc;
 
 use crate::{
     error::ExecutionError,
-    fill::Decision,
     model::order::{Order, OrderKind, RequestOpen},
 };
 
@@ -258,15 +256,6 @@ impl BinanceClient {
     }
 }
 
-pub(super) fn get_order_side(side: Decision) -> &'static str {
-    match side {
-        Decision::Long => "BUY",
-        Decision::Short => "SELL",
-        Decision::CloseLong => "SELL",
-        Decision::CloseShort => "BUY",
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BinanceSigner {
     pub api_key: String,
@@ -371,10 +360,7 @@ impl HttpParser for BinanceParser {
 mod tests {
     use super::*;
     use crate::{
-        execution::binance::requests::FutOrderResponse,
-        fill::MarketMeta,
-        model::{order_event::OrderEventBuilder, ClientOrderId},
-        ExecutionId,
+        execution::binance::requests::FutOrderResponse, model::ClientOrderId, ExecutionId,
     };
     use barter_integration::model::{
         instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},

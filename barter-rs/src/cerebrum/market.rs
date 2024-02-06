@@ -1,6 +1,6 @@
 use super::{order::Algorithmic, strategy::IndicatorUpdater, Cerebrum, Engine, OrderGenerator};
 use barter_data::event::{DataKind, MarketEvent};
-use tracing::info;
+// use tracing::info;
 
 /// MarketUpdater can transition to:
 ///  a) OrderGenerator<Algorithmic>
@@ -15,7 +15,7 @@ where
         // info!(kind = "Market", exchange = ?market.exchange, instrument = %market.instrument, payload = ?market, "received Event");
 
         // Update Positions
-        self.accounts.update_positions(&market);
+        self.accounts.update_positions_from_market_event(&market);
 
         // Update Indicators
         self.strategy.update_indicators(&market);

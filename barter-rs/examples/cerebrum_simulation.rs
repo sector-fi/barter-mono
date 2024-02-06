@@ -1,5 +1,5 @@
 use barter::cerebrum::{
-    account::{Account, Accounts, Position},
+    account::{Account, Accounts},
     event::{Command, Event, EventFeed},
     exchange::ExchangePortal,
     exchange_client::ClientId,
@@ -13,7 +13,7 @@ use barter_execution::{
         balance::Balance,
         execution_event::ExecutionRequest,
         order::{Order, OrderKind, RequestCancel, RequestOpen},
-        ClientOrderId,
+        ClientOrderId, Position,
     },
     simulated::{execution::SimulationConfig, util::run_default_exchange, SimulatedEvent},
     ExecutionId,
@@ -268,7 +268,10 @@ async fn init_account_feed(
         },
         request_tx: event_simulated_tx,
     };
-    exchanges.insert(ExecutionId::Simulated, ClientId::Simulated(sim_config));
+    exchanges.insert(
+        Exchange::from(ExecutionId::Simulated),
+        ClientId::Simulated(sim_config),
+    );
     let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
         .await
         .expect("failed to init ExchangePortal");

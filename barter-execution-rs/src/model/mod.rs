@@ -34,14 +34,29 @@ pub enum AccountEventKind {
 
     // WebSocket Only
     Balance(SymbolBalance),
+
     Trade(Trade),
 
     // HTTP & WebSocket
     Balances(Vec<SymbolBalance>),
+    Positions(Vec<Position>),
     // TODO
     // ExecutionError(ExecutionError),
     // ConnectionStatus,
 }
+
+impl From<(Exchange, AccountEventKind)> for AccountEvent {
+    fn from((exchange, kind): (Exchange, AccountEventKind)) -> Self {
+        Self {
+            received_time: Utc::now(),
+            exchange,
+            kind,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+pub struct Position;
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize, Serialize)]
 pub struct ClientOrderId(pub Uuid);
