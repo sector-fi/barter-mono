@@ -75,6 +75,7 @@ impl ExecutionClient for BinanceExecution {
         &self,
         open_requests: Vec<Order<RequestOpen>>,
     ) -> Vec<Result<Order<Open>, ExecutionError>> {
+        // TODO: this is a ugly, should we be using batch orders?
         let mut tasks = Vec::new();
         for open_request in open_requests {
             let client = self.client.clone();
@@ -85,9 +86,8 @@ impl ExecutionClient for BinanceExecution {
                         OrderId::from(res.orderId),
                         open_request,
                     ))),
-                    // TODO figure out why it failed
                     Err(e) => {
-                        info!("{:?}", e);
+                        error!("{:?}", e);
                         Err(e)
                     }
                 }
