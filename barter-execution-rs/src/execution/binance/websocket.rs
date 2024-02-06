@@ -1,7 +1,7 @@
 use futures::StreamExt;
 use reqwest::Client;
-use tokio::spawn;
-use tokio_tungstenite::connect_async;
+use tokio::{net::TcpStream, spawn};
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tracing::{error, info};
 use url::Url;
 
@@ -46,6 +46,17 @@ async fn get_listen_key(
     Ok(res["listenKey"].as_str().unwrap().to_string())
 }
 
+// async fn return_ws_stream(stream_url: &str) -> WebSocketStream<MaybeTlsStream<TcpStream>> {
+//     let ws_stream = connect_async(Url::parse(stream_url).expect("Failed to parse url"))
+//         .await
+//         .map(|(websocket, _)| websocket)
+//         .expect("Failed to conenct");
+
+//     info!("Connected to Binance user data stream");
+//     println!("stream_url: {}", stream_url);
+//     ws_stream
+// }
+
 async fn listen_to_user_data_stream(stream_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let ws_stream = connect_async(Url::parse(stream_url)?)
         .await
@@ -56,6 +67,8 @@ async fn listen_to_user_data_stream(stream_url: &str) -> Result<(), Box<dyn std:
     println!("stream_url: {}", stream_url);
     let (write, read) = ws_stream.split();
 
+    // TODO track account state here
+    // update account state on diff and send to account state manager
     read.for_each(|message| async {
         if let Ok(msg) = message {
             info!("Received message from Binance: {}", msg.to_text().unwrap());
