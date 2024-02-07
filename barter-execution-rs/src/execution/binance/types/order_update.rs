@@ -286,6 +286,7 @@ impl From<BinanceFutOrderUpdate> for AccountEventKind {
         AccountEventKind::Trade({
             let order = update.order;
             Trade {
+                time: update.event_time,
                 id: TradeId(order.trade_id.to_string()),
                 order_id: OrderId(order.order_id.to_string()),
                 instrument: Instrument {
@@ -299,7 +300,8 @@ impl From<BinanceFutOrderUpdate> for AccountEventKind {
                 fees: SymbolFees {
                     symbol: order.commission_asset.unwrap_or_default(),
                     fees: order.commission.unwrap_or_default(),
-                },
+                }
+                .into(),
             }
         })
     }
@@ -364,8 +366,8 @@ mod test {
                 assert_eq!(trade.side, Side::Buy);
                 assert_eq!(trade.price, 0.0);
                 assert_eq!(trade.quantity, 0.0);
-                assert_eq!(trade.fees.symbol, "USDT".into());
-                assert_eq!(trade.fees.fees, 0.0);
+                assert_eq!(trade.fees.clone().exchange.unwrap().symbol, "USDT".into());
+                assert_eq!(trade.fees.exchange.unwrap().fees, 0.0);
             }
             _ => panic!("unexpected account event"),
         }

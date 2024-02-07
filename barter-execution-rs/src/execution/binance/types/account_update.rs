@@ -1,8 +1,5 @@
 use super::BinanceFuturesEventType;
-use barter_integration::model::{
-    instrument::{symbol::Symbol, Instrument},
-    PerpSide, SubscriptionId,
-};
+use barter_integration::model::{instrument::symbol::Symbol, PerpSide};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

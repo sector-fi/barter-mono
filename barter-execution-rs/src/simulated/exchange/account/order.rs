@@ -1,9 +1,11 @@
 use crate::{
-    model::trade::{SymbolFees, Trade, TradeId},
+    model::trade::{Fees, SymbolFees, Trade, TradeId},
     ExecutionError, Open, Order, OrderId, RequestOpen,
 };
 use barter_data::subscription::trade::PublicTrade;
 use barter_integration::model::{instrument::Instrument, Side};
+use chrono::TimeZone;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, collections::HashMap};
 
@@ -213,13 +215,14 @@ impl Orders {
 
         // Generate execution Trade from the Order<Open> match
         Trade {
+            time: Utc.timestamp_opt(0, 0).unwrap(),
             id: self.trade_id(),
             order_id: order.state.id,
             instrument: order.instrument,
             side: order.side,
             price: order.state.price,
             quantity: trade_quantity,
-            fees,
+            fees: fees.into(),
         }
     }
 

@@ -27,7 +27,7 @@ pub enum ExecutionError {
 }
 
 /// All errors generated in the barter::portfolio module.
-#[derive(Error, Debug)]
+#[derive(Error, Clone, Copy, Debug)]
 pub enum PositionError {
     #[error("Failed to build struct due to missing attributes: {0}")]
     BuilderIncomplete(&'static str),
@@ -43,6 +43,9 @@ pub enum PositionError {
 
     #[error("Cannot generate PositionExit from Position that has not been exited")]
     PositionExit,
+
+    #[error("Negative Trade Quantity")]
+    NegativeTradeQuantity,
     // #[error("Failed to interact with repository")]
     // RepositoryInteraction(#[from] RepositoryError),
 }
