@@ -16,7 +16,8 @@ use barter_execution::{
         balance::Balance,
         execution_event::ExecutionRequest,
         order::{Order, OrderKind, RequestCancel, RequestOpen},
-        ClientOrderId, Position,
+        position::Position,
+        ClientOrderId,
     },
 };
 use dotenv::dotenv;
@@ -288,11 +289,12 @@ where
 }
 
 fn init_account(instruments: Vec<Instrument>) -> Account {
-    let positions = instruments
-        .iter()
-        .cloned()
-        .map(|instrument| (instrument, Position))
-        .collect();
+    // let positions = instruments
+    //     .iter()
+    //     .cloned()
+    //     .map(|instrument| (instrument, Position))
+    //     .collect();
+    let positions: HashMap<Instrument, Position> = HashMap::new();
 
     let balances = instruments
         .into_iter()
@@ -303,8 +305,8 @@ fn init_account(instruments: Vec<Instrument>) -> Account {
             (
                 symbol,
                 Balance {
-                    total: 1000.0,
-                    available: 1000.0,
+                    total: 0.0,
+                    available: 0.0,
                 },
             )
         })

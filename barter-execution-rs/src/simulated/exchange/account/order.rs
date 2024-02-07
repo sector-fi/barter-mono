@@ -1,5 +1,5 @@
 use crate::{
-    model::trade::{Fees, SymbolFees, Trade, TradeId},
+    model::trade::{SymbolFees, Trade, TradeId},
     ExecutionError, Open, Order, OrderId, RequestOpen,
 };
 use barter_data::subscription::trade::PublicTrade;

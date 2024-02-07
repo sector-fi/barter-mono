@@ -167,8 +167,7 @@ pub mod test_util {
         instrument::{kind::InstrumentKind, Instrument},
         Exchange, Side,
     };
-    use chrono::Utc;
-    use chrono::{DateTime, TimeZone};
+    use chrono::{TimeZone, Utc};
 
     pub fn client_orders(
         trade_number: u64,

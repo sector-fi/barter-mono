@@ -3,14 +3,12 @@ use barter_integration::model::{instrument::Instrument, Exchange, Side};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
-use uuid::Uuid;
 
 use crate::error::PositionError;
 
 use super::{
     balance::Balance,
     trade::{FeeAmount, Fees, Trade},
-    AccountEventKind,
 };
 
 /// Enters a new [`Position`].
@@ -563,7 +561,7 @@ mod tests {
             order::OrderId,
             trade::{SymbolFees, TradeId},
         },
-        test_util::{market_event_trade, position, test_trade, trade},
+        test_util::{market_event_trade, position, test_trade},
     };
     use barter_integration::model::{instrument::kind::InstrumentKind, Side};
 
@@ -656,7 +654,7 @@ mod tests {
     fn enter_new_position_and_return_err_with_close_long_decision_provided() -> Result<(), String> {
         // this is close long case trade.decision = Side::Buy;
 
-        let mut trade = Trade {
+        let trade = Trade {
             time: Utc::now(),
             id: TradeId::from("trade_id"),
             order_id: OrderId::from("order_id"),
@@ -685,7 +683,7 @@ mod tests {
     #[test]
     fn enter_new_position_and_return_err_with_negative_quantity_buy_provided() -> Result<(), String>
     {
-        let mut trade = test_trade(
+        let trade = test_trade(
             Side::Buy,
             100.0, // price
             -1.0,  // quantity
@@ -1041,7 +1039,7 @@ mod tests {
             available: 10000.0,
         };
 
-        let mut trade = test_trade(
+        let trade = test_trade(
             Side::Buy,
             50.0,               // price
             -position.quantity, // quantity
@@ -1098,7 +1096,7 @@ mod tests {
         };
 
         // Input Trade
-        let mut trade = test_trade(
+        let trade = test_trade(
             Side::Buy,
             200.0,              // price
             -position.quantity, // quantity
@@ -1211,7 +1209,7 @@ mod tests {
 
     #[test]
     fn calculate_avg_price_gross_correctly_with_positive_quantity() {
-        let mut trade = test_trade(
+        let trade = test_trade(
             Side::Buy,
             1000.0, // price
             1.0,    // quantity
@@ -1224,7 +1222,7 @@ mod tests {
 
     #[test]
     fn calculate_avg_price_gross_correctly_with_negative_quantity() {
-        let mut trade = test_trade(
+        let trade = test_trade(
             Side::Sell,
             1000.0, // price
             -1.0,   // quantity

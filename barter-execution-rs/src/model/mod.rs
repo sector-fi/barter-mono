@@ -1,6 +1,7 @@
 use self::{
     balance::SymbolBalance,
     order::{Cancelled, Open, Order},
+    position::Position,
     trade::Trade,
 };
 use barter_integration::model::Exchange;
@@ -55,9 +56,6 @@ impl From<(Exchange, AccountEventKind)> for AccountEvent {
         }
     }
 }
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-pub struct Position;
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize, Serialize)]
 pub struct ClientOrderId(pub Uuid);

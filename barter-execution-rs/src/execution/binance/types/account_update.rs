@@ -1,11 +1,15 @@
 use super::BinanceFuturesEventType;
-use barter_integration::model::{instrument::symbol::Symbol, PerpSide};
+use barter_integration::model::{
+    instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},
+    PerpSide, Side,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
     balance::{Balance, SymbolBalance},
-    AccountEventKind, Position,
+    position::{Position, PositionMeta},
+    AccountEventKind,
 };
 
 /// [`BinanceFuturesUsd`](super::BinanceFuturesUsd) AccountUpdate messages.
@@ -185,14 +189,39 @@ impl From<BinanceBalanceUpdate> for SymbolBalance {
 }
 
 impl From<BinancePositionUpdate> for Position {
-    fn from(position_update: BinancePositionUpdate) -> Self {
+    fn from(update: BinancePositionUpdate) -> Self {
+        let mut side = Side::Sell;
+        if update.position_amount > 0.0 {
+            side = Side::Buy;
+        }
+
         Self {
-            // symbol: position_update.symbol,
-            // position_amount: position_update.position_amount,
-            // position_side: position_update.position_side,
-            // unrealized_pnl: position_update.unrealized_pnl,
-            // entry_price: position_update.entry_price,
-            // breakeven_price: position_update.breakeven_price,
+            position_id: update.symbol.clone().to_string(),
+            meta: PositionMeta {
+                update_time: Utc::now(),
+                exit_balance: None,
+            },
+            instrument: Instrument::from((
+                update.symbol.clone(),
+                update.symbol.clone(),
+                InstrumentKind::Perpetual,
+            )),
+            side,
+            quantity: update.position_amount,
+            enter_avg_price_gross: update.entry_price,
+            enter_value_gross: update.entry_price * update.position_amount,
+            unrealised_profit_loss: update.unrealized_pnl,
+            realised_profit_loss: update.accumulated_realized,
+
+            // Fees
+            exit_avg_price_gross: 0.0,
+            exit_value_gross: 0.0,
+            current_symbol_price: 0.0,
+            enter_fees: Default::default(),
+            exit_fees: Default::default(),
+            enter_fees_total: 0.0,
+            exit_fees_total: 0.0,
+            current_value_gross: 0.0,
         }
     }
 }
@@ -219,34 +248,6 @@ impl From<BinanceAccountUpdate> for (AccountEventKind, AccountEventKind) {
         )
     }
 }
-
-// impl From<(ExchangeId, Instrument, BinanceAccountUpdate)> for MarketIter<AccountUpdate> {
-//     fn from(
-//         (exchange_id, instrument, account_update): (ExchangeId, Instrument, BinanceAccountUpdate),
-//     ) -> Self {
-//         Self(vec![Ok(MarketEvent {
-//             exchange_time: account_update.event_time,
-//             received_time: Utc::now(),
-//             exchange: Exchange::from(exchange_id),
-//             instrument,
-//             kind: AccountUpdate {
-//                 time: account_update.event_time,
-//                 balance_updates: account_update
-//                     .update_data
-//                     .balance_updates
-//                     .into_iter()
-//                     .map(BalanceUpdate::from)
-//                     .collect(),
-//                 position_updates: account_update
-//                     .update_data
-//                     .position_updates
-//                     .into_iter()
-//                     .map(PositionUpdate::from)
-//                     .collect(),
-//             },
-//         })])
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

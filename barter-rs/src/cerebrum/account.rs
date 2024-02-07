@@ -3,7 +3,8 @@ use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::model::{
     balance::{Balance, SymbolBalance},
     order::{Cancelled, InFlight, Open, Order},
-    AccountEvent, AccountEventKind, ClientOrderId, Position,
+    position::Position,
+    AccountEvent, AccountEventKind, ClientOrderId,
 };
 use barter_integration::model::{
     instrument::{symbol::Symbol, Instrument},

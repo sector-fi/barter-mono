@@ -13,7 +13,8 @@ use barter_execution::{
         balance::Balance,
         execution_event::ExecutionRequest,
         order::{Order, OrderKind, RequestCancel, RequestOpen},
-        ClientOrderId, Position,
+        position::Position,
+        ClientOrderId,
     },
     simulated::{execution::SimulationConfig, util::run_default_exchange, SimulatedEvent},
     ExecutionId,
@@ -315,11 +316,7 @@ where
 }
 
 fn init_account(instruments: Vec<Instrument>) -> Account {
-    let positions = instruments
-        .iter()
-        .cloned()
-        .map(|instrument| (instrument, Position))
-        .collect();
+    let positions: HashMap<Instrument, Position> = HashMap::new();
 
     let balances = instruments
         .into_iter()
