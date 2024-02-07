@@ -1,6 +1,5 @@
 use barter_data::dex::uniswapx;
 use dotenv::dotenv;
-use tokio::time::{sleep, Duration};
 
 #[tokio::main]
 async fn main() {
