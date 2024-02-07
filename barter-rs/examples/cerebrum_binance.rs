@@ -1,20 +1,23 @@
 use barter::cerebrum::{
     account::{Account, Accounts, Position},
     event::{Command, Event, EventFeed},
-    exchange::{ClientId, ExchangePortal},
+    exchange::ExchangePortal,
+    exchange_client::ClientId,
     strategy,
     strategy::IndicatorUpdater,
     Engine,
 };
 use barter_execution::{
-    fill::Fees,
+    execution::binance::{
+        connection::{BinanceApi, LiveOrTest},
+        BinanceConfig,
+    },
     model::{
         balance::Balance,
         execution_event::ExecutionRequest,
         order::{Order, OrderKind, RequestCancel, RequestOpen},
         ClientOrderId,
     },
-    simulated::{execution::SimulationConfig, util::run_default_exchange, SimulatedEvent},
     ExecutionId,
 };
 use dotenv::dotenv;
@@ -31,47 +34,68 @@ use barter_data::{
     streams::Streams,
     subscription::{trade::PublicTrades, Subscription},
 };
-use barter_integration::model::{
-    instrument::{kind::InstrumentKind, Instrument},
-    Exchange, Side,
+use barter_integration::{
+    init_logging,
+    model::{
+        instrument::{kind::InstrumentKind, Instrument},
+        Exchange, Side,
+    },
 };
 use std::ops::Add;
 use std::{collections::HashMap, time::Duration};
 use tokio::sync::mpsc;
+use tracing::info;
 
 struct StrategyExample {
     counter: usize,
+    price: Option<f64>,
     // rsi: ta::indicators::RelativeStrengthIndex,
 }
 
 impl IndicatorUpdater for StrategyExample {
     fn update_indicators(&mut self, market: &MarketEvent<DataKind>) {
-        match &market.kind {
+        let price = match &market.kind {
             DataKind::Trade(trade) => trade.price,
             DataKind::Candle(candle) => candle.close,
             _ => panic!("unexpected DataKind"),
         };
+        self.price = Some(price);
     }
 }
 
 impl strategy::OrderGenerator for StrategyExample {
-    fn generate_cancels(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
+    fn generate_cancels(
+        &mut self,
+        _accounts: &Accounts,
+    ) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
         None
     }
 
-    fn generate_orders(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
-        if self.counter > 10 {
+    fn generate_orders(
+        &mut self,
+        accounts: &Accounts,
+    ) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
+        if self.counter > 1 || self.price.is_none() {
             return None;
         }
+
+        let sim_acc = accounts.get(&Exchange::from(ExecutionId::Simulated));
+        let num_open_orders = sim_acc.orders_open.len();
+        if self.counter > num_open_orders {
+            return None;
+        }
+        println!("accounts {:#?}", sim_acc.orders_open.len());
+
         let order = order_request_limit(
-            Instrument::new("btc", "usdt", InstrumentKind::Perpetual),
+            Instrument::new("eth", "usdt", InstrumentKind::Perpetual),
             ClientOrderId(uuid::Uuid::new_v4()),
             Side::Buy,
-            10000.0,
-            0.001,
+            self.price.unwrap(),
+            0.01,
         );
+
         self.counter += 1;
-        Some(vec![(Exchange::from(ExecutionId::Simulated), vec![order])])
+        Some(vec![(Exchange::from(ExecutionId::Binance), vec![order])])
     }
 }
 
@@ -124,14 +148,8 @@ async fn main() {
     // EventFeed Component: MarketFeed:
     let subscriptions = init_market_feed(event_tx.clone()).await;
 
-    let (event_simulated_tx, event_simulated_rx) = mpsc::unbounded_channel();
-    let (execution_tx, _execution_rx) = mpsc::unbounded_channel();
-
-    // Build SimulatedExchange & run on it's own Tokio task
-    tokio::spawn(run_default_exchange(execution_tx, event_simulated_rx));
-
     // EventFeed Component: AccountFeed:
-    init_account_feed(event_tx.clone(), exchange_rx, event_simulated_tx).await;
+    init_account_feed(event_tx.clone(), exchange_rx).await;
 
     // EventFeed Component: CommandFeed
     init_command_feed(event_tx, terminate);
@@ -144,6 +162,7 @@ async fn main() {
     // StrategyExample
     let strategy = StrategyExample {
         counter: 0,
+        price: None,
         // rsi: ta::indicators::RelativeStrengthIndex::new(14).unwrap(),
     };
 
@@ -174,29 +193,13 @@ where
     Vec<Subscription<Exchange, Kind>>:
         FromIterator<Subscription<Binance<BinanceServerFuturesUsd>, PublicTrades>>, // Exchange: Binance<BinanceServerFuturesUsd>,
 {
-    let subs = vec![
-        (
-            BinanceFuturesUsd::default(),
-            "btc",
-            "usdt",
-            InstrumentKind::Perpetual,
-            PublicTrades,
-        ),
-        (
-            BinanceFuturesUsd::default(),
-            "eth",
-            "usdt",
-            InstrumentKind::Perpetual,
-            PublicTrades,
-        ),
-        (
-            BinanceFuturesUsd::default(),
-            "xrp",
-            "usdt",
-            InstrumentKind::Perpetual,
-            PublicTrades,
-        ),
-    ];
+    let subs = vec![(
+        BinanceFuturesUsd::default(),
+        "eth",
+        "usdt",
+        InstrumentKind::Perpetual,
+        PublicTrades,
+    )];
 
     let mut stream = Streams::<Kind>::builder()
         .subscribe(subs.clone())
@@ -238,30 +241,24 @@ where
 async fn init_account_feed(
     event_tx: mpsc::UnboundedSender<Event>,
     exchange_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
-    event_simulated_tx: mpsc::UnboundedSender<SimulatedEvent>,
 ) {
     let mut exchanges = HashMap::new();
-    let sim_config = SimulationConfig {
-        simulated_fees_pct: Fees {
-            exchange: 0.1,
-            slippage: 0.05,
-            network: 0.0,
-        },
-        request_tx: event_simulated_tx,
+    let execution_config = BinanceConfig {
+        client_type: BinanceApi::Futures(LiveOrTest::Test),
     };
-    exchanges.insert(ExecutionId::Simulated, ClientId::Simulated(sim_config));
+    exchanges.insert(ExecutionId::Binance, ClientId::Binance(execution_config));
     let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
         .await
         .expect("failed to init ExchangePortal");
 
-    // tokio::spawn(async move {
-    //     ex_portal.run().await;
-    // });
+    tokio::spawn(async move {
+        ex_portal.run().await;
+    });
 
     // alternately we can spawn sync thread
-    std::thread::spawn(move || {
-        ex_portal.run();
-    });
+    // std::thread::spawn(move || {
+    //     ex_portal.run();
+    // });
 }
 
 fn init_command_feed(event_tx: mpsc::UnboundedSender<Event>, terminate: Duration) {
@@ -322,17 +319,4 @@ fn init_account(instruments: Vec<Instrument>) -> Account {
         orders_in_flight: HashMap::new(),
         orders_open: HashMap::new(),
     }
-}
-
-/// Initialise a `Subscriber` for `Tracing` Json logs and install it as the global default.
-fn init_logging() {
-    tracing_subscriber::fmt()
-        // Filter messages based on the `RUST_LOG` environment variable
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        // Disable colours on release builds
-        .with_ansi(cfg!(debug_assertions))
-        // Enable Json formatting
-        .json()
-        // Install this Tracing subscriber as global default
-        .init()
 }

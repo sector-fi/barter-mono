@@ -96,6 +96,12 @@ pub struct Account {
 }
 
 impl Accounts {
+    pub fn get(&self, exchange: &Exchange) -> &Account {
+        self.0
+            .get(exchange)
+            .expect("cannot retrieve Account for unexpected Exchange")
+    }
+
     pub fn account(&mut self, exchange: &Exchange) -> &mut Account {
         self.0
             .get_mut(exchange)
@@ -120,7 +126,7 @@ impl Accounts {
             .for_each(|balance| self.update_balance(exchange, balance))
     }
 
-    pub fn update_positions(&mut self, market: &MarketEvent<DataKind>) {
+    pub fn update_positions(&mut self, _market: &MarketEvent<DataKind>) {
         // Todo: Update relevant Positions
     }
 

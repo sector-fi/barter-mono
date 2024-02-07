@@ -157,11 +157,11 @@
 //!     request_tx: mpsc::unbounded_channel().0,
 //! };
 //!
-//! let mut execution = SimulatedExecution::init(config, mpsc::unbounded_channel().0).await;
+//! let mut execution = SimulatedExecution::init(config).await;
 //!
 //! let order_event = test_util::order_event();
 //!
-//! let fill_event = execution.generate_fill(&order_event);
+//! // let fill_event = execution.generate_fill(&order_event);
 //! }
 //! ```
 //!
@@ -198,7 +198,6 @@
 //! [See Readme Engine Example](https://crates.io/crates/barter#example)
 
 #![warn(
-    unused,
     missing_debug_implementations,
     missing_copy_implementations,
     rust_2018_idioms,

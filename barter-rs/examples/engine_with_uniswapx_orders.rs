@@ -13,12 +13,12 @@ use barter::{
     strategy::example::{Config as StrategyConfig, RSIStrategy},
 };
 use barter_data::{
+    dex::uniswapx,
     event::{DataKind, MarketEvent},
     exchange::{binance::spot::BinanceSpot, ExchangeId},
     streams::Streams,
     subscription::trade::PublicTrades,
 };
-
 use barter_execution::{
     fill::Fees,
     simulated::execution::{SimulatedExecution, SimulationConfig},
@@ -30,16 +30,21 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-const ENGINE_RUN_TIMEOUT: Duration = Duration::from_secs(5);
+const ENGINE_RUN_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[tokio::main]
 async fn main() {
+    init_logging();
+
     // Create channel to distribute Commands to the Engine & it's Traders (eg/ Command::Terminate)
     let (_command_tx, command_rx) = mpsc::channel(20);
 
     // Create Event channel to listen to all Engine Events in real-time
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let event_tx = EventTx::new(event_tx);
+
+    // Run Engine trading & listen to Events it produces
+    tokio::spawn(listen_to_engine_events(event_rx));
 
     // Generate unique identifier to associate an Engine's components
     let engine_id = Uuid::new_v4();
@@ -115,9 +120,6 @@ async fn main() {
         .build()
         .expect("failed to build engine");
 
-    // Run Engine trading & listen to Events it produces
-    tokio::spawn(listen_to_engine_events(event_rx));
-
     let _ = tokio::time::timeout(ENGINE_RUN_TIMEOUT, engine.run()).await;
 }
 
@@ -151,11 +153,21 @@ async fn stream_market_event_trades() -> mpsc::UnboundedReceiver<MarketEvent<Dat
     //  - Use `streams.join()` to join all exchange streams into a single mpsc::UnboundedReceiver!
     let mut trade_rx = streams.select(ExchangeId::BinanceSpot).unwrap();
 
+    // Select the UniswapX stream
+    let mut intent_orders = uniswapx::init();
+
     let (tx, rx) = mpsc::unbounded_channel();
+    let tx2 = tx.clone();
 
     tokio::spawn(async move {
         while let Some(trade) = trade_rx.recv().await {
-            let _ = tx.send(MarketEvent::from(trade));
+            let _ = tx2.send(MarketEvent::from(trade));
+        }
+    });
+
+    tokio::spawn(async move {
+        while let Some(order) = intent_orders.recv().await {
+            let _ = tx.send(MarketEvent::from(order));
         }
     });
 
@@ -169,7 +181,18 @@ async fn listen_to_engine_events(mut event_rx: mpsc::UnboundedReceiver<Event>) {
         match event {
             Event::Market(market) => {
                 // Market Event occurred in Engine
-                println!("{market:?}");
+                match market.kind {
+                    DataKind::IntentOrder(order) => {
+                        println!("");
+                        println!("got intent order {order:?}");
+                        println!("");
+                    }
+                    DataKind::Trade(_trade) => {
+                        // print!(".");
+                        // println!("got trade {trade:?}");
+                    }
+                    _ => {}
+                }
             }
             Event::Signal(signal) => {
                 // Signal Event occurred in Engine
@@ -207,4 +230,15 @@ async fn listen_to_engine_events(mut event_rx: mpsc::UnboundedReceiver<Event>) {
             }
         }
     }
+}
+
+// Initialise an INFO `Subscriber` for `Tracing` Json logs and install it as the global default.
+fn init_logging() {
+    tracing_subscriber::fmt()
+        // Disable colours on release builds
+        .with_ansi(cfg!(debug_assertions))
+        // Enable Json formatting
+        .json()
+        // Install this Tracing subscriber as global default
+        .init()
 }
