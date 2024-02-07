@@ -1,5 +1,5 @@
 use barter::cerebrum::{
-    account::{Account, Accounts, Position},
+    account::{Account, Accounts},
     event::{Command, Event, EventFeed},
     exchange::ExchangePortal,
     exchange_client::ClientId,
@@ -13,6 +13,7 @@ use barter_execution::{
         balance::Balance,
         execution_event::ExecutionRequest,
         order::{Order, OrderKind, RequestCancel, RequestOpen},
+        position::Position,
         ClientOrderId,
     },
     simulated::{execution::SimulationConfig, util::run_default_exchange, SimulatedEvent},
@@ -70,8 +71,7 @@ impl strategy::OrderGenerator for StrategyExample {
         &mut self,
         accounts: &Accounts,
     ) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
-        return None;
-        if self.counter > 10 {
+        if self.counter > 1 {
             return None;
         }
         let sim_acc = accounts.get(&Exchange::from(ExecutionId::Simulated));
@@ -268,7 +268,10 @@ async fn init_account_feed(
         },
         request_tx: event_simulated_tx,
     };
-    exchanges.insert(ExecutionId::Simulated, ClientId::Simulated(sim_config));
+    exchanges.insert(
+        Exchange::from(ExecutionId::Simulated),
+        ClientId::Simulated(sim_config),
+    );
     let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
         .await
         .expect("failed to init ExchangePortal");
@@ -313,11 +316,7 @@ where
 }
 
 fn init_account(instruments: Vec<Instrument>) -> Account {
-    let positions = instruments
-        .iter()
-        .cloned()
-        .map(|instrument| (instrument, Position))
-        .collect();
+    let positions: HashMap<Instrument, Position> = HashMap::new();
 
     let balances = instruments
         .into_iter()

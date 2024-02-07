@@ -13,6 +13,12 @@ impl Debug for Symbol {
     }
 }
 
+impl Default for Symbol {
+    fn default() -> Self {
+        Self::new("n/a")
+    }
+}
+
 impl Display for Symbol {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

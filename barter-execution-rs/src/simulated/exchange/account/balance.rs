@@ -130,7 +130,8 @@ impl ClientBalances {
         let (base_delta, quote_delta) = match trade.side {
             Side::Buy => {
                 // Base total & available increase by trade.quantity minus base trade.fees
-                let base_increase = trade.quantity - trade.fees.fees;
+                let base_increase = trade.quantity - trade.fees.calculate_total_fees();
+
                 let base_delta = BalanceDelta {
                     total: base_increase,
                     available: base_increase,
@@ -154,7 +155,8 @@ impl ClientBalances {
                 };
 
                 // Quote total & available increase by (trade.quantity * price) minus quote fees
-                let quote_increase = (trade.quantity * trade.price) - trade.fees.fees;
+                let quote_increase =
+                    (trade.quantity * trade.price) - trade.fees.calculate_total_fees();
                 let quote_delta = BalanceDelta {
                     total: quote_increase,
                     available: quote_increase,

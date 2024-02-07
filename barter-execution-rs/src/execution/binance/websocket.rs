@@ -1,15 +1,24 @@
-use futures::StreamExt;
+use crate::{
+    execution::binance::types::{order_update::BinanceFutOrderStatus, BinanceFuturesEventType},
+    model::AccountEventKind,
+};
+
+use super::types::{
+    account_update::BinanceAccountUpdate, order_update::BinanceFutOrderUpdate,
+    BinanceFutAccountEvent,
+};
+use futures::stream::{BoxStream, StreamExt};
 use reqwest::Client;
-use tokio::{net::TcpStream, spawn};
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info};
 use url::Url;
 
-pub async fn init_listener(api_key: &str, api_url: &str) {
+pub async fn init_listener(api_key: &str, api_url: &str) -> BoxStream<'static, AccountEventKind> {
     let listen_key = get_listen_key(api_key, api_url)
         .await
         .expect("Failed to get listen key");
     let stream_url = format!("wss://fstream.binancefuture.com/ws/{}", listen_key);
+    let stream_url = Url::parse(&stream_url).expect("Failed to parse stream url");
 
     // TODO:
     // PUT /fapi/v1/listenKey
@@ -23,11 +32,12 @@ pub async fn init_listener(api_key: &str, api_url: &str) {
     // loop {
     //     interval.tick().await;
 
-    spawn(async move {
-        if let Err(e) = listen_to_user_data_stream(&stream_url).await {
-            error!("Error listening to user data stream: {}", e);
-        }
-    });
+    // spawn(async move {
+    //     if let Err(e) = listen_to_user_data_stream(&stream_url).await {
+    //         error!("Error listening to user data stream: {}", e);
+    //     }
+    // });
+    listen_to_user_data_stream(stream_url).await
 }
 
 async fn get_listen_key(
@@ -46,34 +56,60 @@ async fn get_listen_key(
     Ok(res["listenKey"].as_str().unwrap().to_string())
 }
 
-// async fn return_ws_stream(stream_url: &str) -> WebSocketStream<MaybeTlsStream<TcpStream>> {
-//     let ws_stream = connect_async(Url::parse(stream_url).expect("Failed to parse url"))
-//         .await
-//         .map(|(websocket, _)| websocket)
-//         .expect("Failed to conenct");
+fn process_message(msg: Message) -> Vec<AccountEventKind> {
+    match msg {
+        Message::Text(text) => {
+            let event: BinanceFutAccountEvent = serde_json::from_str(&text).unwrap();
+            let mut events = Vec::new();
 
-//     info!("Connected to Binance user data stream");
-//     println!("stream_url: {}", stream_url);
-//     ws_stream
-// }
+            match event.event_type {
+                BinanceFuturesEventType::AccountUpdate => {
+                    match serde_json::from_str::<BinanceAccountUpdate>(&text) {
+                        Ok(account_update) => {
+                            let (bal_event, pos_event) =
+                                <(AccountEventKind, AccountEventKind)>::from(account_update);
+                            events.push(bal_event);
+                            events.push(pos_event);
+                        }
+                        Err(e) => {
+                            error!("Failed to parse account update: {}", e);
+                        }
+                    }
+                }
+                BinanceFuturesEventType::OrderTradeUpdate => {
+                    match serde_json::from_str::<BinanceFutOrderUpdate>(&text) {
+                        Ok(trade_update) => match trade_update.order.order_status {
+                            BinanceFutOrderStatus::Filled => {
+                                events.push(trade_update.into());
+                            }
+                            BinanceFutOrderStatus::PartiallyFilled => {
+                                events.push(trade_update.into());
+                            }
+                            _ => {}
+                        },
+                        Err(e) => {
+                            error!("Failed to parse order trade update: {}", e);
+                        }
+                    }
+                }
+            }
+            events
+        }
+        _ => Vec::new(), // Non-text messages generate no events
+    }
+}
 
-async fn listen_to_user_data_stream(stream_url: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let ws_stream = connect_async(Url::parse(stream_url)?)
+async fn listen_to_user_data_stream(ws_url: Url) -> BoxStream<'static, AccountEventKind> {
+    let ws_stream = connect_async(ws_url)
         .await
         .map(|(websocket, _)| websocket)
-        .expect("Failed to conenct");
+        .expect("Failed to conenct to Binance websocket");
 
     info!("Connected to Binance user data stream");
-    println!("stream_url: {}", stream_url);
-    let (write, read) = ws_stream.split();
-
-    // TODO track account state here
-    // update account state on diff and send to account state manager
-    read.for_each(|message| async {
-        if let Ok(msg) = message {
-            info!("Received message from Binance: {}", msg.to_text().unwrap());
-        }
-    })
-    .await;
-    Ok(())
+    ws_stream
+        .flat_map(|message| {
+            let events = process_message(message.unwrap()); // Safely handle unwrap in real code
+            futures::stream::iter(events)
+        })
+        .boxed()
 }

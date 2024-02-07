@@ -19,6 +19,8 @@ use barter_integration::model::{
     instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},
     Side,
 };
+use chrono::TimeZone;
+use chrono::Utc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -496,13 +498,14 @@ async fn test_7_send_market_event_that_exact_full_matches_order(
             ..
         }) => {
             let expected = Trade {
+                time: Utc.timestamp_opt(0, 0).unwrap(),
                 id: TradeId(1.to_string()),
                 order_id: OrderId(3.to_string()),
                 instrument: Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
                 side: Side::Buy,
                 price: 200.0,
                 quantity: 1.0,
-                fees: SymbolFees::new("btc", 1.0 * fees_50_percent()),
+                fees: SymbolFees::new("btc", 1.0 * fees_50_percent()).into(),
             };
             assert_eq!(trade, expected);
         }
@@ -735,13 +738,14 @@ async fn test_10_send_market_event_that_full_and_partial_matches_orders(
             ..
         }) => {
             let expected = Trade {
+                time: Utc.timestamp_opt(0, 0).unwrap(),
                 id: TradeId(2.to_string()),
                 order_id: OrderId(4.to_string()),
                 instrument: Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
                 side: Side::Sell,
                 price: 500.0,
                 quantity: 1.0,
-                fees: SymbolFees::new("usdt", first_full_fill_fees),
+                fees: SymbolFees::new("usdt", first_full_fill_fees).into(),
             };
             assert_eq!(trade, expected);
         }
@@ -792,13 +796,14 @@ async fn test_10_send_market_event_that_full_and_partial_matches_orders(
             ..
         }) => {
             let expected = Trade {
+                time: Utc.timestamp_opt(0, 0).unwrap(),
                 id: TradeId(3.to_string()),
                 order_id: OrderId(5.to_string()),
                 instrument: Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
                 side: Side::Sell,
                 price: 1000.0,
                 quantity: 0.5,
-                fees: SymbolFees::new("usdt", second_partial_fill_fees),
+                fees: SymbolFees::new("usdt", second_partial_fill_fees).into(),
             };
             assert_eq!(trade, expected);
         }

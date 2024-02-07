@@ -31,6 +31,8 @@ use crate::{
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
 use execution::binance::{BinanceConfig, BinanceExecution};
+use futures::stream::BoxStream;
+use model::AccountEventKind;
 use serde::{Deserialize, Serialize};
 use simulated::execution::{SimulatedExecution, SimulationConfig};
 use std::fmt::{Display, Formatter};
@@ -69,6 +71,10 @@ pub trait ExecutionClient {
     /// Usually entails spawning an asynchronous WebSocket event loop to consume [`AccountEvent`]s
     /// from the exchange, as well as returning the HTTP client `Self`.
     async fn init(config: Self::Config) -> Self;
+
+    async fn init_stream(&self) -> Option<BoxStream<'static, AccountEventKind>> {
+        None
+    }
 
     /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
     // fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
@@ -145,17 +151,23 @@ impl ExecutionId {
 pub mod test_util {
     use crate::{
         model::{
-            trade::{SymbolFees, Trade, TradeId},
+            position::Position,
+            trade::{Fees, SymbolFees, Trade, TradeId},
             ClientOrderId,
         },
         simulated::exchange::account::order::Orders,
         Open, Order, OrderId,
     };
-    use barter_data::subscription::trade::PublicTrade;
+    use barter_data::{
+        event::{DataKind, MarketEvent},
+        exchange::ExchangeId,
+        subscription::trade::PublicTrade,
+    };
     use barter_integration::model::{
         instrument::{kind::InstrumentKind, Instrument},
         Exchange, Side,
     };
+    use chrono::{TimeZone, Utc};
 
     pub fn client_orders(
         trade_number: u64,
@@ -201,13 +213,70 @@ pub mod test_util {
 
     pub fn trade(id: TradeId, side: Side, price: f64, quantity: f64, fees: SymbolFees) -> Trade {
         Trade {
+            time: Utc.timestamp_opt(0, 0).unwrap(),
             id,
             order_id: OrderId::from("order_id"),
             instrument: Instrument::from(("base", "quote", InstrumentKind::Perpetual)),
             side,
             price,
             quantity,
-            fees,
+            fees: fees.into(),
+        }
+    }
+
+    pub fn test_trade(sid: Side, price: f64, quantity: f64) -> Trade {
+        Trade {
+            time: Utc.timestamp_opt(0, 0).unwrap(),
+            id: TradeId::from("trade_id"),
+            order_id: OrderId::from("order_id"),
+            instrument: Instrument::from(("base", "quote", InstrumentKind::Perpetual)),
+            side: sid,
+            price,
+            quantity,
+            fees: Fees {
+                exchange: Some(SymbolFees::new("usdt", 1.0)),
+                slippage: Some(SymbolFees::new("usdt", 1.0)),
+                network: Some(SymbolFees::new("usdt", 1.0)),
+            },
+        }
+    }
+
+    /// Build a [`Position`].
+    pub fn position() -> Position {
+        Position {
+            position_id: "engine_id_trader_{}_{}_position".to_owned(),
+            instrument: Instrument::from(("eth", "usdt", InstrumentKind::Spot)),
+            meta: Default::default(),
+            side: Side::Buy,
+            quantity: 1.0,
+            enter_fees: Default::default(),
+            enter_fees_total: 0.0,
+            enter_avg_price_gross: 100.0,
+            enter_value_gross: 100.0,
+            exit_fees: Default::default(),
+            exit_fees_total: 0.0,
+            exit_avg_price_gross: 0.0,
+            exit_value_gross: 0.0,
+            current_symbol_price: 100.0,
+            current_value_gross: 100.0,
+            unrealised_profit_loss: 0.0,
+            realised_profit_loss: 0.0,
+        }
+    }
+
+    /// Build a [`MarketEvent`] of [`DataKind::PublicTrade`](DataKind) with the provided [`Side`].
+    pub fn market_event_trade(side: Side) -> MarketEvent<DataKind> {
+        MarketEvent {
+            exchange_time: Utc::now(),
+            received_time: Utc::now(),
+            exchange: Exchange::from(ExchangeId::BinanceSpot),
+            instrument: Instrument::from(("btc", "usdt", InstrumentKind::Spot)),
+            kind: DataKind::Trade(PublicTrade {
+                id: "trade_id".to_string(),
+                price: 1000.0,
+                amount: 1.0,
+                side,
+            }),
         }
     }
 }

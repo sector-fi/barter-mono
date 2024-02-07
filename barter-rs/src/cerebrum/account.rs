@@ -3,6 +3,7 @@ use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::model::{
     balance::{Balance, SymbolBalance},
     order::{Cancelled, InFlight, Open, Order},
+    position::Position,
     AccountEvent, AccountEventKind, ClientOrderId,
 };
 use barter_integration::model::{
@@ -39,6 +40,12 @@ impl<Strategy> Cerebrum<AccountUpdater, Strategy> {
                 orders
                     .iter()
                     .for_each(|order| self.accounts.update_orders_from_open(&order));
+            }
+
+            AccountEventKind::Positions(positions) => {
+                info!(kind = "Account", exchange = ?account.exchange, payload = ?positions, "received Event");
+                self.accounts
+                    .update_positions(&account.exchange, &positions);
             }
 
             // TODO: do we need to treat OrdersNew differently to OrdersOpen?
@@ -121,13 +128,19 @@ impl Accounts {
     }
 
     pub fn update_balances(&mut self, exchange: &Exchange, balances: &Vec<SymbolBalance>) {
+        info!(exchange = ?exchange, "Received Balance Update");
+
         balances
             .into_iter()
             .for_each(|balance| self.update_balance(exchange, balance))
     }
 
-    pub fn update_positions(&mut self, _market: &MarketEvent<DataKind>) {
+    pub fn update_positions_from_market_event(&mut self, _market: &MarketEvent<DataKind>) {
         // Todo: Update relevant Positions
+    }
+
+    pub fn update_positions(&mut self, exchange: &Exchange, _positions: &Vec<Position>) {
+        info!(exchange = ?exchange, "Received Position Update");
     }
 
     // Todo: refactor this if we don't use in_flight
@@ -272,6 +285,3 @@ impl Accounts {
         };
     }
 }
-
-#[derive(Debug, Clone, Copy)]
-pub struct Position;

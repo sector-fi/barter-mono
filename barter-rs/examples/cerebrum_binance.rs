@@ -1,5 +1,5 @@
 use barter::cerebrum::{
-    account::{Account, Accounts, Position},
+    account::{Account, Accounts},
     event::{Command, Event, EventFeed},
     exchange::ExchangePortal,
     exchange_client::ClientId,
@@ -16,9 +16,9 @@ use barter_execution::{
         balance::Balance,
         execution_event::ExecutionRequest,
         order::{Order, OrderKind, RequestCancel, RequestOpen},
+        position::Position,
         ClientOrderId,
     },
-    ExecutionId,
 };
 use dotenv::dotenv;
 
@@ -44,7 +44,7 @@ use barter_integration::{
 use std::ops::Add;
 use std::{collections::HashMap, time::Duration};
 use tokio::sync::mpsc;
-use tracing::info;
+// use tracing::info;
 
 struct StrategyExample {
     counter: usize,
@@ -79,12 +79,12 @@ impl strategy::OrderGenerator for StrategyExample {
             return None;
         }
 
-        let sim_acc = accounts.get(&Exchange::from(ExecutionId::Simulated));
-        let num_open_orders = sim_acc.orders_open.len();
+        let account = accounts.get(&ExchangeId::BinanceFuturesUsd.into());
+        let num_open_orders = account.orders_open.len();
         if self.counter > num_open_orders {
             return None;
         }
-        println!("accounts {:#?}", sim_acc.orders_open.len());
+        println!("accounts {:#?}", accounts);
 
         let order = order_request_limit(
             Instrument::new("eth", "usdt", InstrumentKind::Perpetual),
@@ -95,7 +95,7 @@ impl strategy::OrderGenerator for StrategyExample {
         );
 
         self.counter += 1;
-        Some(vec![(Exchange::from(ExecutionId::Binance), vec![order])])
+        Some(vec![(ExchangeId::BinanceFuturesUsd.into(), vec![order])])
     }
 }
 
@@ -111,7 +111,7 @@ where
     I: Into<Instrument>,
 {
     Order {
-        exchange: Exchange::from(ExecutionId::Simulated),
+        exchange: ExchangeId::BinanceFuturesUsd.into(),
         instrument: instrument.into(),
         cid,
         side,
@@ -154,7 +154,7 @@ async fn main() {
     // EventFeed Component: CommandFeed
     init_command_feed(event_tx, terminate);
 
-    let exchange: Exchange = Exchange::from(ExchangeId::BinanceFuturesUsd);
+    let exchange = Exchange::from(ExchangeId::BinanceFuturesUsd);
 
     // Accounts(HashMap<Exchange, Account>):
     let accounts = init_accounts(exchange, subscriptions);
@@ -246,7 +246,10 @@ async fn init_account_feed(
     let execution_config = BinanceConfig {
         client_type: BinanceApi::Futures(LiveOrTest::Test),
     };
-    exchanges.insert(ExecutionId::Binance, ClientId::Binance(execution_config));
+    exchanges.insert(
+        Exchange::from(ExchangeId::BinanceFuturesUsd),
+        ClientId::Binance(execution_config),
+    );
     let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
         .await
         .expect("failed to init ExchangePortal");
@@ -282,20 +285,16 @@ where
 
     let mut accounts = HashMap::new();
     accounts.insert(exchange, init_account(instruments.clone()));
-    // we need to init instruments for simulated exchange
-    accounts.insert(
-        Exchange::from(ExecutionId::Simulated),
-        init_account(instruments),
-    );
     Accounts(accounts)
 }
 
 fn init_account(instruments: Vec<Instrument>) -> Account {
-    let positions = instruments
-        .iter()
-        .cloned()
-        .map(|instrument| (instrument, Position))
-        .collect();
+    // let positions = instruments
+    //     .iter()
+    //     .cloned()
+    //     .map(|instrument| (instrument, Position))
+    //     .collect();
+    let positions: HashMap<Instrument, Position> = HashMap::new();
 
     let balances = instruments
         .into_iter()
@@ -306,8 +305,8 @@ fn init_account(instruments: Vec<Instrument>) -> Account {
             (
                 symbol,
                 Balance {
-                    total: 1000.0,
-                    available: 1000.0,
+                    total: 0.0,
+                    available: 0.0,
                 },
             )
         })
