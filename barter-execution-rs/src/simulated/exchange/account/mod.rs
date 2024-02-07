@@ -102,7 +102,7 @@ impl ClientAccount {
             .send(AccountEvent {
                 received_time: Utc::now(),
                 exchange: Exchange::from(ExecutionId::Simulated),
-                kind: AccountEventKind::OrdersNew(vec![open.clone()]),
+                kind: AccountEventKind::OrdersOpen(vec![open.clone()]),
             })
             .expect("Client is offline - failed to send AccountEvent::Trade");
 

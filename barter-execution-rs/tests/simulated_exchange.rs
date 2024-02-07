@@ -212,7 +212,7 @@ async fn test_3_open_limit_buy_order(
     // Check AccountEvent OrderNew generated
     match event_account_rx.try_recv() {
         Ok(AccountEvent {
-            kind: AccountEventKind::OrdersNew(new_orders),
+            kind: AccountEventKind::OrdersOpen(new_orders),
             ..
         }) => {
             assert_eq!(new_orders.len(), 1);
@@ -395,7 +395,7 @@ async fn test_6_open_2x_limit_buy_orders(
     // Check AccountEvent OrdersNew for first order
     match event_account_rx.try_recv() {
         Ok(AccountEvent {
-            kind: AccountEventKind::OrdersNew(new_orders),
+            kind: AccountEventKind::OrdersOpen(new_orders),
             ..
         }) => {
             assert_eq!(new_orders.len(), 1);
@@ -424,7 +424,7 @@ async fn test_6_open_2x_limit_buy_orders(
     // Check AccountEvent OrdersNew for second order
     match event_account_rx.try_recv() {
         Ok(AccountEvent {
-            kind: AccountEventKind::OrdersNew(new_orders),
+            kind: AccountEventKind::OrdersOpen(new_orders),
             ..
         }) => {
             assert_eq!(new_orders.len(), 1);
@@ -621,7 +621,7 @@ async fn test_9_open_2x_limit_sell_orders(
     // Check AccountEvent OrdersNew for first order
     match event_account_rx.try_recv() {
         Ok(AccountEvent {
-            kind: AccountEventKind::OrdersNew(new_orders),
+            kind: AccountEventKind::OrdersOpen(new_orders),
             ..
         }) => {
             assert_eq!(new_orders.len(), 1);
@@ -656,7 +656,7 @@ async fn test_9_open_2x_limit_sell_orders(
     // Check AccountEvent OrdersNew for second order
     match event_account_rx.try_recv() {
         Ok(AccountEvent {
-            kind: AccountEventKind::OrdersNew(new_orders),
+            kind: AccountEventKind::OrdersOpen(new_orders),
             ..
         }) => {
             assert_eq!(new_orders.len(), 1);
@@ -994,7 +994,7 @@ async fn test_13_fail_to_open_one_of_two_limits_with_insufficient_funds(
     // Check AccountEvent OrdersNew for first order
     match event_account_rx.try_recv() {
         Ok(AccountEvent {
-            kind: AccountEventKind::OrdersNew(new_orders),
+            kind: AccountEventKind::OrdersOpen(new_orders),
             ..
         }) => {
             assert_eq!(new_orders.len(), 1);

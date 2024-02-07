@@ -2,6 +2,7 @@ use super::event::Event;
 use super::exchange_client::{ClientId, ExchangeClient};
 use barter_execution::error::ExecutionError;
 use barter_execution::model::execution_event::ExecutionRequest;
+use barter_execution::model::order::{InFlight, Order};
 use barter_execution::model::{AccountEvent, AccountEventKind};
 use barter_execution::ExecutionClient;
 use barter_integration::model::Exchange;
@@ -76,7 +77,7 @@ impl ExchangePortal {
     }
 
     fn send_account_tx(
-        event_tx: mpsc::UnboundedSender<Event>,
+        event_tx: &mpsc::UnboundedSender<Event>,
         exchange: Exchange,
         kind: AccountEventKind,
     ) {
@@ -85,9 +86,11 @@ impl ExchangePortal {
             received_time: chrono::Utc::now(),
             kind,
         };
-        event_tx
-            .send(Event::Account(account_event))
-            .expect("Account engine is offline");
+
+        match event_tx.send(Event::Account(account_event)) {
+            Ok(_) => (),
+            Err(e) => error!(error = ?e, "Account engine is offline"),
+        }
     }
 
     /// Todo:
@@ -101,7 +104,7 @@ impl ExchangePortal {
                 // Account Engine
                 Some((exchange, account_event)) = self.account_stream.next() => {
                     let event_tx = self.event_tx.clone();
-                    Self::send_account_tx(event_tx, exchange, account_event);
+                    Self::send_account_tx(&event_tx, exchange, account_event);
                 },
 
                 // Processes execution requests
@@ -118,12 +121,16 @@ impl ExchangePortal {
                                 let orders = open_request.1;
                                 let client = self.client(&exchange);
                                 let tx = self.event_tx.clone();
-                                info!("sending OpenOrders ");
+
+                                // track in-flight orders
+                                let in_flight_orders = orders.iter().map(|order| order.into()).collect::<Vec<Order<InFlight>>>();
+                                Self::send_account_tx(&tx, exchange.clone(), AccountEventKind::OrdersNew(in_flight_orders));
+
                                 tokio::spawn(async move {
                                     let open_orders = client.open_orders(orders).await;
                                     let open_orders = remove_error_responses(open_orders);
-                                    let account_event = AccountEventKind::OrdersNew(open_orders);
-                                    Self::send_account_tx(tx, exchange, account_event);
+                                    let account_event = AccountEventKind::OrdersOpen(open_orders);
+                                    Self::send_account_tx(&tx, exchange, account_event);
                                 });
                             });
                         }
@@ -134,7 +141,7 @@ impl ExchangePortal {
                                 tokio::spawn(async move {
                                     match client.fetch_orders_open().await {
                                         Ok(orders) => Self::send_account_tx(
-                                            tx,
+                                            &tx,
                                             exchange.clone(),
                                             AccountEventKind::OrdersOpen(orders),
                                         ),
@@ -150,7 +157,7 @@ impl ExchangePortal {
                                 tokio::spawn(async move {
                                     match client.fetch_balances().await {
                                         Ok(balances) => Self::send_account_tx(
-                                            tx,
+                                            &tx,
                                             exchange,
                                             AccountEventKind::Balances(balances),
                                         ),
@@ -169,7 +176,7 @@ impl ExchangePortal {
                                     let cancelled_orders = client.cancel_orders(orders).await;
                                     let cancelled_orders = remove_error_responses(cancelled_orders);
                                     let account_event = AccountEventKind::OrdersCancelled(cancelled_orders);
-                                    Self::send_account_tx(tx, exchange, account_event);
+                                    Self::send_account_tx(&tx, exchange, account_event);
                                 });
                             });
                         }
@@ -180,7 +187,7 @@ impl ExchangePortal {
                                 tokio::spawn(async move {
                                     match client.cancel_orders_all().await {
                                         Ok(cancelled_orders) => Self::send_account_tx(
-                                            tx,
+                                            &tx,
                                             exchange,
                                             AccountEventKind::OrdersCancelled(cancelled_orders),
                                         ),

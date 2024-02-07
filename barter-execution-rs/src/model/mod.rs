@@ -1,6 +1,6 @@
 use self::{
     balance::SymbolBalance,
-    order::{Cancelled, Open, Order},
+    order::{Cancelled, InFlight, Open, Order, RequestOpen},
     position::Position,
     trade::Trade,
 };
@@ -31,7 +31,7 @@ pub struct AccountEvent {
 pub enum AccountEventKind {
     // HTTP Only
     OrdersOpen(Vec<Order<Open>>),
-    OrdersNew(Vec<Order<Open>>),
+    OrdersNew(Vec<Order<InFlight>>),
     OrdersCancelled(Vec<Order<Cancelled>>),
 
     // WebSocket Only

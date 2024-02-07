@@ -54,8 +54,7 @@ impl<Strategy> Cerebrum<AccountUpdater, Strategy> {
                 info!(kind = "Account", exchange = ?account.exchange, payload = "OrdersNew", "received Event");
                 orders
                     .iter()
-                    .for_each(|order| self.accounts.update_orders_from_open(&order));
-                // .for_each(|order| self.accounts.update_order_from_new(&order));
+                    .for_each(|order| self.accounts.update_order_from_new(&order));
             }
 
             AccountEventKind::OrdersCancelled(cancelled) => {
