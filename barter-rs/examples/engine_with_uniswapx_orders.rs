@@ -25,6 +25,12 @@ use barter_execution::{
     ExecutionClient,
 };
 use barter_integration::model::{instrument::kind::InstrumentKind, Market};
+use futures::{
+    stream::{self, SelectAll},
+    Stream,
+};
+use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+
 use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
@@ -154,7 +160,7 @@ async fn stream_market_event_trades() -> mpsc::UnboundedReceiver<MarketEvent<Dat
     let mut trade_rx = streams.select(ExchangeId::BinanceSpot).unwrap();
 
     // Select the UniswapX stream
-    let mut intent_orders = uniswapx::init();
+    let (mut uniswap_rx, _) = uniswapx::init();
 
     let (tx, rx) = mpsc::unbounded_channel();
     let tx2 = tx.clone();
@@ -165,8 +171,9 @@ async fn stream_market_event_trades() -> mpsc::UnboundedReceiver<MarketEvent<Dat
         }
     });
 
+    let mut merged_stream = stream::select_all(uniswap_rx);
     tokio::spawn(async move {
-        while let Some(order) = intent_orders.recv().await {
+        while let Some(order) = merged_stream.next().await {
             let _ = tx.send(MarketEvent::from(order));
         }
     });

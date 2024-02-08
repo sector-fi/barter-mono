@@ -5,6 +5,7 @@ use crate::{
         candle::Candle,
         intent_order::IntentOrder,
         liquidation::Liquidation,
+        rfq_request::RfqRequest,
         trade::PublicTrade,
     },
 };
@@ -62,6 +63,7 @@ pub enum DataKind {
     Candle(Candle),
     Liquidation(Liquidation),
     IntentOrder(IntentOrder),
+    RfqRequest(RfqRequest),
 }
 
 impl From<MarketEvent<PublicTrade>> for MarketEvent<DataKind> {
@@ -129,9 +131,21 @@ impl From<&IntentOrder> for MarketEvent<DataKind> {
         Self {
             exchange_time: chrono::Utc::now(),
             received_time: chrono::Utc::now(),
-            exchange: Exchange::from("IntentOrder"),
+            exchange: Exchange::from("Uniswapx"),
             instrument: order.instrument.clone(),
             kind: DataKind::IntentOrder(order.clone()),
+        }
+    }
+}
+
+impl From<&RfqRequest> for MarketEvent<DataKind> {
+    fn from(rfq: &RfqRequest) -> Self {
+        Self {
+            exchange_time: rfq.timestamp,
+            received_time: rfq.timestamp,
+            exchange: Exchange::from("Uniswapx"),
+            instrument: rfq.instrument.clone(),
+            kind: DataKind::RfqRequest(rfq.clone()),
         }
     }
 }

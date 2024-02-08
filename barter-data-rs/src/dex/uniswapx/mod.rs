@@ -3,14 +3,20 @@ use super::tokens::TokenCache;
 use super::DexError;
 use crate::event::{DataKind, MarketEvent};
 use crate::subscription::intent_order::{IntentOrder, IntentOrderUpdate};
+use crate::subscription::rfq_request::RfqRequest;
 use barter_integration::model::instrument::{kind::InstrumentKind, Instrument};
 use eyre::Result;
 use market::Market;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use reqwest;
+use tokio::sync::broadcast::Sender;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio::time::{sleep, Duration};
+use uniswapx_quoter::{
+    quotes::{QuoteRequest, QuoteResponse},
+    UniswapxQuoter,
+};
 
 pub mod market;
 pub mod uni_order;
@@ -191,9 +197,84 @@ pub fn filter_open_orders(
     return filtered_orders;
 }
 
-pub fn init() -> UnboundedReceiver<MarketEvent<DataKind>> {
-    let (tx, rx) = mpsc::unbounded_channel();
+fn deserialize_orders(json_str: &str) -> Result<Vec<UniOrder>, serde_json::Error> {
+    // Define a helper struct to match the JSON structure
+    let data: Response = serde_json::from_str(json_str)?;
+    Ok(data.orders)
+}
 
+async fn quote_raw_to_datakind(quote: QuoteRequest) -> Result<RfqRequest, DexError> {
+    let tokens = TokenCache::instance().lock().await;
+    let token_in = tokens
+        .get_token(&(quote.token_in_chain_id as u64), &quote.token_in)
+        .await?;
+    let token_out = tokens
+        .get_token(&(quote.token_out_chain_id as u64), &quote.token_out)
+        .await?;
+
+    let market = Market::new(&token_in, &token_out);
+    let (quote_asset, base_asset, _buy) =
+        market::Market::get_quote_and_base(&market.quotes, &token_in.symbol, &token_out.symbol);
+    let instrument: Instrument = Instrument::new(
+        quote_asset.clone(),
+        base_asset.clone(),
+        InstrumentKind::IntentOrder,
+    );
+    let amount = convert_bigint_string_to_float(&quote.amount, token_out.decimals, 10)?;
+
+    let rfq = RfqRequest {
+        instrument,
+        timestamp: chrono::Utc::now(),
+        request_id: quote.request_id.clone(),
+        token_in_chain_id: quote.token_in_chain_id.clone(),
+        token_out_chain_id: quote.token_out_chain_id.clone(),
+        swapper: quote.swapper.clone(),
+        token_in: quote.token_in.clone(),
+        token_out: quote.token_out.clone(),
+        ask: amount,
+        ask_raw: quote.amount.clone(),
+    };
+    Ok(rfq)
+}
+
+fn start_quoter() -> (
+    UnboundedReceiver<MarketEvent<DataKind>>,
+    Sender<QuoteResponse>,
+) {
+    let server = UniswapxQuoter::new();
+    let (mut quotes_raw_rx, quotes_raw_tx) = server.start();
+    let (quotes_self_tx, quotes_app_rx) = mpsc::unbounded_channel::<MarketEvent<DataKind>>();
+
+    // Convert and send quotes to the app
+    tokio::spawn(async move {
+        loop {
+            let result: Option<QuoteRequest> = quotes_raw_rx.recv().await;
+            match result {
+                Some(request) => {
+                    let res = quote_raw_to_datakind(request).await;
+                    match res {
+                        Ok(data) => {
+                            let event = MarketEvent::from(&data);
+                            quotes_self_tx.send(event).unwrap();
+                        }
+                        Err(e) => {
+                            eprintln!("Error occurred mapping quote to rfq request! {}", e);
+                        }
+                    }
+                }
+                None => {
+                    println!("No orders - something has failed");
+                }
+            }
+        }
+    });
+
+    (quotes_app_rx, quotes_raw_tx)
+}
+
+fn start_order_poll() -> UnboundedReceiver<MarketEvent<DataKind>> {
+    let (tx, rx) = mpsc::unbounded_channel();
+    // Start the open orders loop
     tokio::spawn(async move {
         let mut open_orders = Vec::<UniOrder>::new();
         loop {
@@ -236,11 +317,18 @@ pub fn init() -> UnboundedReceiver<MarketEvent<DataKind>> {
             sleep(delay_duration).await;
         }
     });
-    return rx;
+
+    rx
 }
 
-fn deserialize_orders(json_str: &str) -> Result<Vec<UniOrder>, serde_json::Error> {
-    // Define a helper struct to match the JSON structure
-    let data: Response = serde_json::from_str(json_str)?;
-    Ok(data.orders)
+pub fn init() -> (
+    Vec<UnboundedReceiver<MarketEvent<DataKind>>>,
+    Sender<QuoteResponse>,
+) {
+    // Start the two steams. 1 being quotes from the quoter and 2 being an open orders poll
+    let (quoter_rx, quoter_tx) = start_quoter();
+    let order_rx = start_order_poll();
+    let rx = vec![quoter_rx, order_rx];
+
+    (rx, quoter_tx)
 }

@@ -18,7 +18,8 @@ rust_decimal_macros = "1.29.1"
 
 
 [dependencies]
-barter-integration = { version = "0.5.3", path = "../barter-integration-rs" } # Barter Ecosystem
+barter-integration = { version = "0.5.3", path = "../barter-integration-rs" }
+uniswapx-quoter = { version = "0.1.0", path = "../uniswapx-quoter-rs" }
 barter-macro = "0.1.1"
 
 # Logging
@@ -32,7 +33,7 @@ tokio = { version = "1.20.1", features = [
     "rt-multi-thread",
     "fs",
 ] }
-tokio-stream = { version = "0.1.9", features = ["sync"] }
+tokio-stream = { version = "0.1.9", features = ["sync", "full"] }
 futures = "0.3.21"
 async-trait = "0.1.57"
 tokio-tungstenite = { version = "0.18.0", features = [

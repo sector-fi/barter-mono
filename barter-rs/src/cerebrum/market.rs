@@ -1,7 +1,6 @@
 use super::{order::Algorithmic, strategy::IndicatorUpdater, Cerebrum, Engine, OrderGenerator};
 use barter_data::event::{DataKind, MarketEvent};
 
-
 /// MarketUpdater can transition to:
 ///  a) OrderGenerator<Algorithmic>
 #[derive(Debug, Clone, Copy)]

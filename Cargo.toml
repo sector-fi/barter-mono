@@ -5,5 +5,6 @@ members = [
     "barter-data-rs",
     "barter-integration-rs",
     "barter-rs",
-    "barter-execution-rs",
+    "barter-execution-rs", 
+    "uniswapx-quoter-rs",
 ]

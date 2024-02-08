@@ -5,7 +5,7 @@ use tokio::time::{sleep, Duration};
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    let mut rx = uniswapx::init();
+    let (mut rx, tx) = uniswapx::init();
 
     loop {
         let result = rx.recv().await;
